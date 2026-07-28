@@ -15,7 +15,8 @@ ARG SUITECRM_VERSION
 
 # Runtime system dependencies (no -dev, no build cruft)
 # unzip serve all'estrazione in docker-entrypoint.sh
-RUN apk add --no-cache \
+RUN apk update && apk upgrade --no-cache \
+    && apk add --no-cache \
         apache2 \
         apache2-proxy \
         apache2-utils \
