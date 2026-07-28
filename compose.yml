@@ -1,0 +1,38 @@
+name: suitecrm
+
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: suitecrm
+      MYSQL_USER: suitecrm
+      MYSQL_PASSWORD: suitecrm_password
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      SUITECRM_DB_HOST: db
+      SUITECRM_DB_NAME: suitecrm
+      SUITECRM_DB_USER: suitecrm
+      SUITECRM_DB_PASSWORD: suitecrm_password
+    volumes:
+      - app_data:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  app_data:
