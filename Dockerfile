@@ -1,16 +1,12 @@
-# Stage 1: Download SuiteCRM
+# Stage 1: Download SuiteCRM zip
 FROM alpine:3.24 AS builder
 
 ARG SUITECRM_VERSION=7.15.1
 
-RUN apk add --no-cache curl unzip
+RUN apk add --no-cache curl
 
-WORKDIR /tmp
-RUN curl -fsSL -o suitecrm.zip \
-    "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip" \
-    && unzip suitecrm.zip \
-    && rm suitecrm.zip \
-    && mv "SuiteCRM-${SUITECRM_VERSION}" /suitecrm
+RUN curl -fsSL -o /suitecrm.zip \
+    "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip"
 
 # Stage 2: PHP 8.4 Alpine + Apache httpd + PHP-FPM
 FROM php:8.4-fpm-alpine
@@ -18,11 +14,13 @@ FROM php:8.4-fpm-alpine
 ARG SUITECRM_VERSION
 
 # Runtime system dependencies (no -dev, no build cruft)
+# unzip serve all'estrazione in docker-entrypoint.sh
 RUN apk add --no-cache \
         apache2 \
         apache2-proxy \
         apache2-utils \
         curl \
+        unzip \
         freetype \
         libjpeg-turbo \
         libpng \
@@ -104,15 +102,8 @@ RUN set -eux; \
         echo '</Directory>'; \
     } > /etc/apache2/conf.d/suitecrm-dir.conf
 
-# Copy SuiteCRM from builder stage
-COPY --from=builder --chown=www-data:www-data /suitecrm /usr/src/suitecrm
-
-# Set SuiteCRM directory permissions
-RUN find /usr/src/suitecrm -type d -exec chmod 755 {} \; \
-    && find /usr/src/suitecrm -type f -exec chmod 644 {} \; \
-    && chmod -R 775 /usr/src/suitecrm/cache \
-    && chmod -R 775 /usr/src/suitecrm/upload \
-    || true
+# Copy SuiteCRM zip (estratto all'avvio da docker-entrypoint.sh)
+COPY --from=builder /suitecrm.zip /usr/src/suitecrm.zip
 
 # PHP configuration overrides for SuiteCRM
 RUN { \

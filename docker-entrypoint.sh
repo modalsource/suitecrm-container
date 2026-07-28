@@ -5,9 +5,12 @@ set -e
 php-fpm -D
 
 if [ -z "$(ls -A /var/www/html 2>/dev/null)" ]; then
-    echo "Copying SuiteCRM to /var/www/html..."
-    cp -rp /usr/src/suitecrm/* /var/www/html/
-    echo "SuiteCRM copied."
+    echo "Extracting SuiteCRM to /var/www/html..."
+    tmpdir=$(mktemp -d)
+    unzip -q -o /usr/src/suitecrm.zip -d "$tmpdir"
+    cp -rp "$tmpdir"/*/* /var/www/html/
+    rm -rf "$tmpdir"
+    echo "SuiteCRM extracted."
 fi
 
 if [ ! -f /var/www/html/custom/private.key ] || [ ! -f /var/www/html/custom/public.key ]; then
