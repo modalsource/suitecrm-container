@@ -1,5 +1,5 @@
 # Stage 1: Download and prepare SuiteCRM
-FROM alpine:3.20 AS builder
+FROM alpine:3.24 AS builder
 
 ARG SUITECRM_VERSION=7.15.1
 
