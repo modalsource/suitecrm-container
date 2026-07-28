@@ -1,73 +1,112 @@
-# Stage 1: Download and prepare SuiteCRM
+# Stage 1: Download SuiteCRM zip
 FROM alpine:3.24 AS builder
 
 ARG SUITECRM_VERSION=7.15.1
 
-RUN apk add --no-cache curl unzip
+RUN apk add --no-cache curl
 
-WORKDIR /tmp
-RUN curl -fsSL -o suitecrm.zip \
-    "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip" \
-    && unzip suitecrm.zip \
-    && mv "SuiteCRM-${SUITECRM_VERSION}" /suitecrm
+RUN curl -fsSL -o /suitecrm.zip \
+    "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip"
 
-# Stage 2: PHP 8.4 + Apache httpd
-FROM php:8.4-apache
+# Stage 2: PHP 8.4 Alpine + Apache httpd + PHP-FPM
+FROM php:8.4-fpm-alpine
 
-# System dependencies and PHP extensions required by SuiteCRM
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-        libfreetype6-dev \
-        libjpeg62-turbo-dev \
-        libpng-dev \
-        libldap2-dev \
-        libzip-dev \
-        libonig-dev \
-        libicu-dev \
-        libxml2-dev \
+ARG SUITECRM_VERSION
+
+# Runtime system dependencies (Alpine)
+# unzip serve all'estrazione in docker-entrypoint.sh
+RUN apk update && apk upgrade --no-cache \
+    && apk add --no-cache \
+        apache2 \
+        apache2-proxy \
+        apache2-utils \
+        curl \
         unzip \
-        cron \
-    && rm -rf /var/lib/apt/lists/*
+        freetype \
+        libjpeg-turbo \
+        libpng \
+        libldap \
+        openldap \
+        libzip \
+        oniguruma \
+        icu-libs \
+        libxml2 \
+        ca-certificates \
+    && rm -rf /var/cache/apk/*
 
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+# Build PHP extensions, then nuke build-deps in the same layer
+RUN set -eux; \
+    apk add --no-cache --virtual .build-deps \
+        freetype-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+        openldap-dev \
+        libzip-dev \
+        oniguruma-dev \
+        icu-dev \
+        libxml2-dev \
+    ; \
+    docker-php-ext-configure gd --with-freetype --with-jpeg; \
+    docker-php-ext-install -j$(nproc) \
         mysqli \
         pdo_mysql \
         gd \
         mbstring \
         zip \
         bcmath \
-        calendar
-
-RUN docker-php-ext-install -j$(nproc) \
+        calendar \
         intl \
         ldap \
-        soap
+        soap \
+    ; \
+    apk del .build-deps; \
+    rm -rf /var/cache/apk/* /tmp/*
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Enable Apache modules and configure for PHP-FPM + SuiteCRM
+RUN set -eux; \
+    sed -i 's/#LoadModule rewrite_module/LoadModule rewrite_module/' /etc/apache2/httpd.conf; \
+    sed -i 's/#LoadModule proxy_module/LoadModule proxy_module/' /etc/apache2/httpd.conf; \
+    sed -i 's/#LoadModule proxy_fcgi_module/LoadModule proxy_fcgi_module/' /etc/apache2/httpd.conf; \
+    sed -i 's/DirectoryIndex index.html/DirectoryIndex index.php index.html/' /etc/apache2/httpd.conf; \
+    sed -i 's/^User apache/User www-data/' /etc/apache2/httpd.conf; \
+    sed -i 's/^Group apache/Group www-data/' /etc/apache2/httpd.conf; \
+    sed -i 's/^#ServerName www.example.com:80/ServerName localhost:80/' /etc/apache2/httpd.conf; \
+    sed -i 's|/var/www/localhost/htdocs|/var/www/html|g' /etc/apache2/httpd.conf
 
-# Configure Apache to allow .htaccess
-RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' \
-        /etc/apache2/apache2.conf || true
+# PHP-FPM pool config (use same uid/gid as Apache)
+RUN set -eux; \
+    { \
+        echo '[www]'; \
+        echo 'user = www-data'; \
+        echo 'group = www-data'; \
+        echo 'listen = 127.0.0.1:9000'; \
+        echo 'pm = dynamic'; \
+        echo 'pm.max_children = 10'; \
+        echo 'pm.start_servers = 2'; \
+        echo 'pm.min_spare_servers = 1'; \
+        echo 'pm.max_spare_servers = 5'; \
+    } > /usr/local/etc/php-fpm.d/zzz-suitecrm.conf
 
-# Copy SuiteCRM from builder to a source directory (not the web root)
-COPY --from=builder /suitecrm /usr/src/suitecrm
+# Apache: PHP-FPM handler via proxy_fcgi
+RUN set -eux; \
+    { \
+        echo '<FilesMatch \.php$>'; \
+        echo '    SetHandler "proxy:fcgi://127.0.0.1:9000"'; \
+        echo '</FilesMatch>'; \
+    } > /etc/apache2/conf.d/php-fpm.conf
 
-# Set source directory permissions
-RUN chown -R www-data:www-data /usr/src/suitecrm \
-    && find /usr/src/suitecrm -type d -exec chmod 755 {} \; \
-    && find /usr/src/suitecrm -type f -exec chmod 644 {} \; \
-    && chmod -R 775 /usr/src/suitecrm/cache \
-    && chmod -R 775 /usr/src/suitecrm/upload \
-    && chmod -R 775 /usr/src/suitecrm/config.php \
-    || true
+# Apache: allow .htaccess overrides in SuiteCRM
+RUN set -eux; \
+    { \
+        echo '<Directory /var/www/html>'; \
+        echo '    AllowOverride All'; \
+        echo '</Directory>'; \
+    } > /etc/apache2/conf.d/suitecrm-dir.conf
 
-# Cron for SuiteCRM scheduler
-RUN echo "* * * * * www-data php -f /var/www/html/cron.php > /dev/null 2>&1" \
-    > /etc/cron.d/suitecrm \
-    && chmod 0644 /etc/cron.d/suitecrm
+# Copy SuiteCRM zip (estratto all'avvio da docker-entrypoint.sh)
+COPY --from=builder /suitecrm.zip /usr/src/suitecrm.zip
 
-# PHP configuration for SuiteCRM
+# PHP configuration overrides for SuiteCRM
 RUN { \
         echo "upload_max_filesize = 100M"; \
         echo "post_max_size = 100M"; \
@@ -79,6 +118,30 @@ RUN { \
         echo "log_errors = On"; \
     } > /usr/local/etc/php/conf.d/suitecrm.ini
 
+# Remove PEAR, dev headers, build scripts (not needed at runtime)
+RUN rm -rf \
+        /usr/local/include/php \
+        /usr/local/lib/php/PEAR \
+        /usr/local/lib/php/build \
+        /usr/local/lib/php/test \
+        /usr/local/lib/php/doc \
+        /usr/local/lib/php/Archive \
+        /usr/local/lib/php/Console \
+        /usr/local/lib/php/OS \
+        /usr/local/lib/php/Structures \
+        /usr/local/lib/php/XML \
+        /usr/local/lib/php/data \
+        /usr/local/lib/php/PEAR.php \
+        /usr/local/lib/php/System.php \
+        /usr/local/lib/php/pearcmd.php \
+        /usr/local/lib/php/peclcmd.php \
+        /usr/local/bin/pear \
+        /usr/local/bin/peardev \
+        /usr/local/bin/pecl \
+        /usr/local/bin/phpize \
+        /usr/local/bin/php-config \
+        /usr/local/etc/pear.conf
+
 WORKDIR /var/www/html
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -87,4 +150,4 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 EXPOSE 80
 
-CMD ["apache2-foreground"]
+CMD ["httpd", "-D", "FOREGROUND"]

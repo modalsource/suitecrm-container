@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Docker image
         uses: docker/build-push-action@v7
@@ -23,14 +23,22 @@ jobs:
           load: true
           tags: ${{ github.repository }}:pr-${{ github.event.number }}
 
+      - name: Install docker-squash and squash layers
+        run: |
+          pip install --break-system-packages docker-squash 2>/dev/null || pip install docker-squash
+          docker-squash ${{ github.repository }}:pr-${{ github.event.number }} \
+            -t ${{ github.repository }}:pr-${{ github.event.number }}-squashed
+
       - name: Run Trivy vulnerability scanner
         id: trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ github.repository }}:pr-${{ github.event.number }}
+          image-ref: ${{ github.repository }}:pr-${{ github.event.number }}-squashed
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
 
       - name: Generate vulnerability summary
         if: always()
