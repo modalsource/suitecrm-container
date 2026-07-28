@@ -1,4 +1,4 @@
-# Stage 1: Download e preparazione SuiteCRM
+# Stage 1: Download and prepare SuiteCRM
 FROM alpine:3.20 AS builder
 
 ARG SUITECRM_VERSION=7.15.1
@@ -14,7 +14,7 @@ RUN curl -fsSL -o suitecrm.zip \
 # Stage 2: PHP 8.4 + Apache httpd
 FROM php:8.4-apache
 
-# Dipendenze di sistema ed estensioni PHP richieste da SuiteCRM
+# System dependencies and PHP extensions required by SuiteCRM
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
@@ -43,17 +43,17 @@ RUN docker-php-ext-install -j$(nproc) \
         ldap \
         soap
 
-# Abilita mod_rewrite di Apache
+# Enable Apache mod_rewrite
 RUN a2enmod rewrite
 
-# Configura Apache per permettere .htaccess
+# Configure Apache to allow .htaccess
 RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' \
         /etc/apache2/apache2.conf || true
 
-# Copia SuiteCRM dal builder in una directory sorgente (non la web root)
+# Copy SuiteCRM from builder to a source directory (not the web root)
 COPY --from=builder /suitecrm /usr/src/suitecrm
 
-# Permessi sulla sorgente
+# Set source directory permissions
 RUN chown -R www-data:www-data /usr/src/suitecrm \
     && find /usr/src/suitecrm -type d -exec chmod 755 {} \; \
     && find /usr/src/suitecrm -type f -exec chmod 644 {} \; \
@@ -62,12 +62,12 @@ RUN chown -R www-data:www-data /usr/src/suitecrm \
     && chmod -R 775 /usr/src/suitecrm/config.php \
     || true
 
-# Cron per SuiteCRM scheduler
+# Cron for SuiteCRM scheduler
 RUN echo "* * * * * www-data php -f /var/www/html/cron.php > /dev/null 2>&1" \
     > /etc/cron.d/suitecrm \
     && chmod 0644 /etc/cron.d/suitecrm
 
-# Configurazione PHP per SuiteCRM
+# PHP configuration for SuiteCRM
 RUN { \
         echo "upload_max_filesize = 100M"; \
         echo "post_max_size = 100M"; \

@@ -1,28 +1,28 @@
 # SuiteCRM Container
 
-SuiteCRM 7.15.1 su PHP 8.4 + Apache httpd + MariaDB 11.4.
+SuiteCRM 7.15.1 on PHP 8.4 + Apache httpd + MariaDB 11.4.
 
-## Avvio
+## Quick Start
 
 ```bash
 docker compose up -d
 ```
 
-Apri `http://localhost:8080` e segui l'installer.
+Open `http://localhost:8080` and follow the installer.
 
-Dati database preconfigurati in `compose.yml`:
+Preconfigured database credentials in `compose.yml`:
 - Host: `db`
 - Database: `suitecrm`
 - User: `suitecrm`
 - Password: `suitecrm_password`
 
-## Build senza compose
+## Build without Compose
 
 ```bash
 docker build -t suitecrm:7.15.1 .
 docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.1
 ```
 
-## Volumi
+## Volumes
 
-I dati del database e di SuiteCRM sono persistenti (`db_data`, `app_data`). Se `app_data` è vuoto all'avvio, SuiteCRM viene copiato automaticamente dal container.
+Database and SuiteCRM data are persisted (`db_data`, `app_data`). If `app_data` is empty on startup, SuiteCRM is automatically copied from the container.
