@@ -1,0 +1,4 @@
+openssl genrsa -out /var/www/html/custom/private.key 2048
+openssl rsa -in /var/www/html/custom/private.key -pubout -out /var/www/html/custom/public.key
+chmod 640 /var/www/html/custom/private.key
+chgrp www-data /var/www/html/custom/private.key /var/www/html/custom/public.key
