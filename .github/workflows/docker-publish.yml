@@ -38,13 +38,27 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
-      - name: Build and push Docker image
+      - name: Build Docker image (load into local daemon)
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:build
+
+      - name: Install docker-squash and squash layers
+        run: |
+          pip install --break-system-packages docker-squash 2>/dev/null || pip install docker-squash
+          docker-squash ${{ env.IMAGE_NAME }}:build \
+            -t ${{ env.IMAGE_NAME }}:squashed
+
+      - name: Push squashed image
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            docker tag ${{ env.IMAGE_NAME }}:squashed "$tag"
+            docker push "$tag"
+          done
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0

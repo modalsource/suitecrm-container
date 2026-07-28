@@ -1,5 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 set -e
+
+# Start PHP-FPM in background (Alpine uses FPM + Apache proxy_fcgi)
+php-fpm -D
 
 if [ -z "$(ls -A /var/www/html 2>/dev/null)" ]; then
     echo "Copying SuiteCRM to /var/www/html..."
