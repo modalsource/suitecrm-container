@@ -15,7 +15,7 @@ RUN curl -fsSL -o suitecrm.zip \
 FROM php:8.4-apache
 
 # System dependencies and PHP extensions required by SuiteCRM
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
         libpng-dev \
