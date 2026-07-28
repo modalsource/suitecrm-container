@@ -13,7 +13,7 @@ FROM php:8.4-fpm-alpine
 
 ARG SUITECRM_VERSION
 
-# Runtime system dependencies (no -dev, no build cruft)
+# Runtime system dependencies (Alpine)
 # unzip serve all'estrazione in docker-entrypoint.sh
 RUN apk update && apk upgrade --no-cache \
     && apk add --no-cache \
