@@ -12,7 +12,7 @@ RUN curl -fsSL -o suitecrm.zip \
     && mv "SuiteCRM-${SUITECRM_VERSION}" /suitecrm
 
 # Stage 2: PHP 8.4 + Apache httpd
-FROM php:8.4-apache
+FROM php:8.5-apache
 
 # System dependencies and PHP extensions required by SuiteCRM
 RUN apt-get update && apt-get install -y --no-install-recommends \
