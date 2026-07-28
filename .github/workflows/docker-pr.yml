@@ -36,24 +36,28 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "### Trivy Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Target | Type | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|---|---|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          REPORT=${{ github.workspace }}/trivy-report.json
           trivy image --format json \
             --cache-dir ${{ github.workspace }}/.cache/trivy \
-            ${{ github.repository }}:pr-${{ github.event.number }} \
-            2>/dev/null | \
-          jq -r '.Results[]? | select(.Vulnerabilities != null) | 
-            [.Target, .Type,
-             ([.Vulnerabilities[] | select(.Severity == "CRITICAL")] | length),
-             ([.Vulnerabilities[] | select(.Severity == "HIGH")] | length),
-             ([.Vulnerabilities[] | select(.Severity == "MEDIUM")] | length),
-             ([.Vulnerabilities[] | select(.Severity == "LOW")] | length),
-             ([.Vulnerabilities[] | select(.Severity == "UNKNOWN")] | length)
-            ] | 
-            "| " + .[0] + " | " + .[1] + " | " + (.[2]|tostring) + " | " + (.[3]|tostring) + " | " + (.[4]|tostring) + " | " + (.[5]|tostring) + " | " + (.[6]|tostring) + " |"' \
-          >> $GITHUB_STEP_SUMMARY
+            --skip-db-update \
+            --skip-java-db-update \
+            -o "$REPORT" \
+            ${{ github.repository }}:pr-${{ github.event.number }}
+          {
+            echo "### Trivy Vulnerability Summary"
+            echo ""
+            echo "| Target | Type | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN |"
+            echo "|---|---|---|---|---|---|---|"
+            jq -r '.Results[]? | select(.Vulnerabilities != null) |
+              [.Target, .Type,
+               ([.Vulnerabilities[] | select(.Severity == "CRITICAL")] | length),
+               ([.Vulnerabilities[] | select(.Severity == "HIGH")] | length),
+               ([.Vulnerabilities[] | select(.Severity == "MEDIUM")] | length),
+               ([.Vulnerabilities[] | select(.Severity == "LOW")] | length),
+               ([.Vulnerabilities[] | select(.Severity == "UNKNOWN")] | length)
+              ] |
+              "| " + .[0] + " | " + .[1] + " | " + (.[2]|tostring) + " | " + (.[3]|tostring) + " | " + (.[4]|tostring) + " | " + (.[5]|tostring) + " | " + (.[6]|tostring) + " |"' "$REPORT"
+          } >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Trivy results to GitHub Security tab
         if: always()
