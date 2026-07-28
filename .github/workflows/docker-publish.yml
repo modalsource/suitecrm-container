@@ -65,21 +65,22 @@ jobs:
             --skip-java-db-update \
             -o "$REPORT" \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          {
-            echo "### Trivy Vulnerability Summary"
-            echo ""
-            echo "| Target | Type | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN |"
-            echo "|---|---|---|---|---|---|---|"
-            jq -r '.Results[]? | select(.Vulnerabilities != null) |
+          echo ""
+          echo "======= Trivy Vulnerability Summary ======="
+          echo ""
+          jq -r '
+            ["Target", "Type", "CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"],
+            ["------", "----", "--------", "----", "------", "---", "-------"],
+            (.Results[]? | select(.Vulnerabilities != null) |
               [.Target, .Type,
                ([.Vulnerabilities[] | select(.Severity == "CRITICAL")] | length),
                ([.Vulnerabilities[] | select(.Severity == "HIGH")] | length),
                ([.Vulnerabilities[] | select(.Severity == "MEDIUM")] | length),
                ([.Vulnerabilities[] | select(.Severity == "LOW")] | length),
                ([.Vulnerabilities[] | select(.Severity == "UNKNOWN")] | length)
-              ] |
-              "| " + .[0] + " | " + .[1] + " | " + (.[2]|tostring) + " | " + (.[3]|tostring) + " | " + (.[4]|tostring) + " | " + (.[5]|tostring) + " | " + (.[6]|tostring) + " |"' "$REPORT"
-          } >> $GITHUB_STEP_SUMMARY
+              ]
+            )[] |
+            @tsv' "$REPORT" | column -t -s $'\t'
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
