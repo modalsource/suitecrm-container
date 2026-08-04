@@ -9,7 +9,7 @@ RUN curl -fsSL -o /suitecrm.zip \
     "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip"
 
 # Stage 2: PHP 8.4 Alpine + Apache httpd + PHP-FPM
-FROM php:8.4-fpm-alpine
+FROM php:8.5-fpm-alpine
 
 ARG SUITECRM_VERSION
 
