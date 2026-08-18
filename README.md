@@ -1,6 +1,6 @@
 # SuiteCRM Container
 
-SuiteCRM 7.15.1 on PHP 8.4 + Apache httpd + MariaDB 11.4.
+SuiteCRM 7.15.2 on PHP 8.4 + Apache httpd + MariaDB 11.4.
 
 ## Quick Start
 
@@ -19,8 +19,8 @@ Preconfigured database credentials in `compose.yml`:
 ## Build without Compose
 
 ```bash
-docker build -t suitecrm:7.15.1 .
-docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.1
+docker build -t suitecrm:7.15.2 .
+docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.2
 ```
 
 ## Volumes
