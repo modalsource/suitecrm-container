@@ -56,9 +56,9 @@ cp -rp /var/www/html/custom/public.key /var/www/html/Api/V8/OAuth2/
 echo "Keys copied."
 
 echo "Applying permissions on /var/www/html..."
-chown -R www-data:www-data /var/www/html
-find /var/www/html -type d -print0 | xargs -0 chmod 755
-find /var/www/html -type f -print0 | xargs -0 chmod 644
+find /var/www/html -path '*/.git' -prune -o -print0 | xargs -0 chown www-data:www-data
+find /var/www/html -path '*/.git' -prune -o -type d -print0 | xargs -0 chmod 755
+find /var/www/html -path '*/.git' -prune -o -type f -print0 | xargs -0 chmod 644
 chmod -R 775 /var/www/html/cache /var/www/html/upload 2>/dev/null || true
 chmod 775 /var/www/html/config.php 2>/dev/null || true
 echo "Permissions applied."
