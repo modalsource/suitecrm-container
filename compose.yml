@@ -23,10 +23,30 @@ services:
     ports:
       - "8080:80"
     environment:
-      SUITECRM_DB_HOST: db
-      SUITECRM_DB_NAME: suitecrm
-      SUITECRM_DB_USER: suitecrm
-      SUITECRM_DB_PASSWORD: suitecrm_password
+      # NOTE: the SUITECRM_INSTALL_* variables below are only used once, the first
+      # time the container starts against an empty app_data volume, and only if
+      # SUITECRM_SILENT_INSTALL=true. See README > Silent Install.
+      SUITECRM_INSTALL_DB_HOST: db
+      SUITECRM_INSTALL_DB_NAME: suitecrm
+      SUITECRM_INSTALL_DB_USER: suitecrm
+      SUITECRM_INSTALL_DB_PASSWORD: suitecrm_password
+      # Set to "true" (e.g. `SUITECRM_SILENT_INSTALL=true docker compose up`) to skip
+      # the web installer and provision SuiteCRM automatically using the settings
+      # above (see README > Silent Install).
+      SUITECRM_SILENT_INSTALL: "${SUITECRM_SILENT_INSTALL:-false}"
+      SUITECRM_INSTALL_SITE_URL: http://localhost:8080
+      SUITECRM_INSTALL_ADMIN_PASSWORD: admin
+      SUITECRM_INSTALL_DEMO_DATA: "no"
+      # Locale / currency (see README > Silent Install)
+      SUITECRM_INSTALL_DEFAULT_LANGUAGE: "${SUITECRM_INSTALL_DEFAULT_LANGUAGE:-en_us}"
+      SUITECRM_INSTALL_DEFAULT_CHARSET: "${SUITECRM_INSTALL_DEFAULT_CHARSET:-UTF-8}"
+      SUITECRM_INSTALL_CURRENCY_NAME: "${SUITECRM_INSTALL_CURRENCY_NAME:-US Dollar}"
+      SUITECRM_INSTALL_CURRENCY_SYMBOL: "${SUITECRM_INSTALL_CURRENCY_SYMBOL:-$$}"
+      SUITECRM_INSTALL_CURRENCY_ISO4217: "${SUITECRM_INSTALL_CURRENCY_ISO4217:-USD}"
+      SUITECRM_INSTALL_CURRENCY_SIGNIFICANT_DIGITS: "${SUITECRM_INSTALL_CURRENCY_SIGNIFICANT_DIGITS:-2}"
+      SUITECRM_INSTALL_NUMBER_GROUPING_SEPARATOR: "${SUITECRM_INSTALL_NUMBER_GROUPING_SEPARATOR:-,}"
+      SUITECRM_INSTALL_DECIMAL_SEPARATOR: "${SUITECRM_INSTALL_DECIMAL_SEPARATOR:-.}"
+      SUITECRM_INSTALL_DISABLE_PERSISTENT_CONNECTIONS: "${SUITECRM_INSTALL_DISABLE_PERSISTENT_CONNECTIONS:-false}"
     volumes:
       - app_data:/var/www/html
     depends_on:

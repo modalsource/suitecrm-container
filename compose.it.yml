@@ -1,0 +1,28 @@
+name: suitecrm
+
+# Italian locale example.
+#
+# This is a Docker Compose override file: it must be combined with the base
+# compose.yml, which provides the `db` service and the rest of the `app`
+# service configuration (ports, volumes, DB credentials, ...). Only the
+# settings that differ for an Italian install are listed here.
+#
+# Usage:
+#   docker compose -f compose.yml -f compose.it.yml up -d
+#
+# All SUITECRM_INSTALL_* variables here are silent-install-only: they are read
+# once when the app_data volume is empty and have no effect afterwards (see
+# README > Silent Install).
+services:
+  app:
+    environment:
+      SUITECRM_SILENT_INSTALL: "true"
+      SUITECRM_INSTALL_DEFAULT_LANGUAGE: it_it
+      SUITECRM_INSTALL_DEFAULT_CHARSET: UTF-8
+      SUITECRM_INSTALL_CURRENCY_NAME: Euro
+      SUITECRM_INSTALL_CURRENCY_SYMBOL: "€"
+      SUITECRM_INSTALL_CURRENCY_ISO4217: EUR
+      SUITECRM_INSTALL_CURRENCY_SIGNIFICANT_DIGITS: 2
+      # Italian number format: 1.234,56 (dot for thousands, comma for decimals)
+      SUITECRM_INSTALL_NUMBER_GROUPING_SEPARATOR: "."
+      SUITECRM_INSTALL_DECIMAL_SEPARATOR: ","
