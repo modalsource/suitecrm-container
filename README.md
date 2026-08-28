@@ -1,6 +1,19 @@
 # SuiteCRM Container
 
-SuiteCRM 7.15.2 on PHP 8.4 + Apache httpd + MariaDB 11.4.
+SuiteCRM 7.15.2 on PHP 8.4 + Apache httpd (Docker image) — plus MariaDB 11.4, added on
+top by `compose.yml`.
+
+**Docker image** (`Dockerfile`): PHP 8.4-FPM (Alpine) + Apache httpd (reverse-proxied to
+PHP-FPM via `proxy_fcgi`), all PHP extensions required by SuiteCRM, and the SuiteCRM
+7.15.2 archive baked in (extracted into `/var/www/html` on first container start by
+`docker-entrypoint.sh`). It does **not** include a database — MariaDB is not part of
+this image.
+
+**`compose.yml`**: orchestrates the full stack — the `app` service (built from this
+image) plus a separate `db` service (`mariadb:11.4`), the network between them, the
+persistent volumes (`db_data`, `app_data`), port mapping (`8080:80`), and the
+environment variables that configure the `app` container (DB credentials, silent
+install options, etc. — see below).
 
 ## Quick Start
 
