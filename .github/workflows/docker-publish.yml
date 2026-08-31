@@ -28,6 +28,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v6
@@ -38,27 +44,16 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
-      - name: Build Docker image (load into local daemon)
+      - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: false
-          load: true
-          tags: ${{ env.IMAGE_NAME }}:build
-
-      - name: Install docker-squash and squash layers
-        run: |
-          pip install --break-system-packages docker-squash 2>/dev/null || pip install docker-squash
-          docker-squash ${{ env.IMAGE_NAME }}:build \
-            -t ${{ env.IMAGE_NAME }}:squashed
-
-      - name: Push squashed image
-        run: |
-          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            docker tag ${{ env.IMAGE_NAME }}:squashed "$tag"
-            docker push "$tag"
-          done
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
@@ -76,22 +71,22 @@ jobs:
         run: |
           REPORT=${{ github.workspace }}/trivy-report.json
           trivy image --format json \
-            --cache-dir ${{ github.workspace }}/.cache/trivy \
-            --skip-db-update \
-            --skip-java-db-update \
-            -o "$REPORT" \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+              --cache-dir ${{ github.workspace }}/.cache/trivy \
+              --skip-db-update \
+              --skip-java-db-update \
+              -o "$REPORT" \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           echo ""
           echo "======= Trivy Vulnerability Summary ======="
           echo ""
           jq -r '
-            .Results[]? | select(.Vulnerabilities != null) |
-            "\(.Target) | \(.Type) | \([.Vulnerabilities[] | select(.Severity == "CRITICAL")] | length) | \([.Vulnerabilities[] | select(.Severity == "HIGH")] | length) | \([.Vulnerabilities[] | select(.Severity == "MEDIUM")] | length) | \([.Vulnerabilities[] | select(.Severity == "LOW")] | length) | \([.Vulnerabilities[] | select(.Severity == "UNKNOWN")] | length)"' "$REPORT" | \
-          {
+              .Results[]? | select(.Vulnerabilities != null) |
+              "\(.Target) | \(.Type) | \([.Vulnerabilities[] | select(.Severity == "CRITICAL")] | length) | \([.Vulnerabilities[] | select(.Severity == "HIGH")] | length) | \([.Vulnerabilities[] | select(.Severity == "MEDIUM")] | length) | \([.Vulnerabilities[] | select(.Severity == "LOW")] | length) | \([.Vulnerabilities[] | select(.Severity == "UNKNOWN")] | length)"' "$REPORT" | \
+            {
             echo "Target | Type | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN"
             echo "------ | ---- | -------- | ---- | ------ | --- | -------"
             cat
-          } | column -t -s '|'
+            } | column -t -s '|'
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4.37.4
