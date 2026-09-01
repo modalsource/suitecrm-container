@@ -1,0 +1,73 @@
+{
+  "categories": [
+    {
+      "title": "## Features",
+      "labels": ["feat", "feature", "enhancement"]
+    },
+    {
+      "title": "## Bug Fixes",
+      "labels": ["fix", "bug", "bugfix"]
+    },
+    {
+      "title": "## Security",
+      "labels": ["security", "sec"]
+    },
+    {
+      "title": "## Documentation",
+      "labels": ["docs", "documentation"]
+    },
+    {
+      "title": "## Maintenance",
+      "labels": ["chore", "ci", "build", "deps", "dependency", "refactor", "perf", "test"]
+    },
+    {
+      "title": "## Kubernetes",
+      "labels": ["k8s", "kubernetes"]
+    },
+    {
+      "title": "## Other Changes",
+      "labels": []
+    }
+  ],
+  "ignore_labels": ["ignore-for-release"],
+  "label_extractor": [
+    {
+      "pattern": "^(feat|feature)(\\(.+\\))?(!)?:.*",
+      "target": "feat",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(fix|bug|bugfix)(\\(.+\\))?(!)?:.*",
+      "target": "fix",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(security|sec)(\\(.+\\))?(!)?:.*",
+      "target": "security",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(docs|documentation)(\\(.+\\))?(!)?:.*",
+      "target": "docs",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(chore|ci|build|deps|dependency|refactor|perf|test)(\\(.+\\))?(!)?:.*",
+      "target": "$1",
+      "on_property": "title"
+    },
+    {
+      "pattern": "^(k8s|kubernetes)(\\(.+\\))?(!)?:.*",
+      "target": "k8s",
+      "on_property": "title"
+    }
+  ],
+  "template": "#{{CHANGELOG}}\n\n**Full Changelog**: https://github.com/#{{OWNER}}/#{{REPO}}/compare/#{{FROM_TAG}}...#{{TO_TAG}}",
+  "pr_template": "- #{{TITLE}} (#{{NUMBER}}) @#{{AUTHOR}}",
+  "commit_template": "- #{{TITLE}} (#{{MERGE_SHA}}) @#{{AUTHOR}}",
+  "empty_template": "- No changes",
+  "tag_resolver": {
+    "method": "sort"
+  },
+  "base_branches": ["main"]
+}

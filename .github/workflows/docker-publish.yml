@@ -126,9 +126,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: Create GitHub Release with auto-generated notes
+      - name: Build Changelog (commit + PR, EN)
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          configuration: .github/changelog-builder.json
+          # HYBRID = PRs + direct commits (needed for push diretti su main senza PR)
+          mode: HYBRID
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
-          # tag is taken from GITHUB_REF_NAME (v7.15.2-rN), manual bump stays manual
+          body: ${{ steps.build_changelog.outputs.changelog }}
+          generate_release_notes: false
