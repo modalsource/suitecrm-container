@@ -23,7 +23,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: cron
-              image: suitecrm:7.15.2 # <-- same image as the Deployment
+              image: suitecrm:7.15.2-r0 # <-- same image as the Deployment (Bitnami-style rN)
               imagePullPolicy: IfNotPresent
               # SuiteCRM cron.php must be run as www-data in the docroot
               command:

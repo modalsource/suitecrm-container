@@ -3,7 +3,7 @@ name: Build and push Docker image
 on:
   push:
     tags:
-      - '*'
+      - 'v*.*.*-r*'
 
 env:
   REGISTRY: ghcr.io
@@ -34,15 +34,38 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Parse versions (Bitnami-style vX.Y.Z-rN)
+        id: parse
+        run: |
+          set -euo pipefail
+          REF="${GITHUB_REF_NAME}"
+          echo "Git tag: ${REF}"
+          if ! [[ "${REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+$ ]]; then
+            echo "::error::Tag '${REF}' does not match expected format vX.Y.Z-rN (e.g. v7.15.2-r0)"
+            exit 1
+          fi
+          FULL="${REF#v}"
+          SUITECRM="${FULL%%-*}"
+          MAJOR_MINOR="$(echo "${SUITECRM}" | cut -d. -f1,2)"
+          MAJOR="$(echo "${SUITECRM}" | cut -d. -f1)"
+          echo "full_version=${FULL}" >> "${GITHUB_OUTPUT}"
+          echo "suitecrm_version=${SUITECRM}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
+          echo "major=${MAJOR}" >> "${GITHUB_OUTPUT}"
+          echo "Parsed FULL=${FULL} SUITECRM=${SUITECRM} MAJOR_MINOR=${MAJOR_MINOR} MAJOR=${MAJOR}"
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=${{ steps.parse.outputs.full_version }}
+            type=raw,value=${{ steps.parse.outputs.suitecrm_version }}
+            type=raw,value=${{ steps.parse.outputs.major_minor }}
+            type=raw,value=${{ steps.parse.outputs.major }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
@@ -54,6 +77,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            SUITECRM_VERSION=${{ steps.parse.outputs.suitecrm_version }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0

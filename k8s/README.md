@@ -75,7 +75,7 @@ kubectl apply -k k8s/overlays/app-nginx   # or app-traefik
 ## OVH Prerequisites
 
 1. **MKS Cluster** (≥ 1.29) + kubeconfig + `kubectl get storageclasses` (`csi-cinder-high-speed` recommended).
-2. **Image** `suitecrm:7.15.2` built and pushed to OVH Harbor / GHCR (`k8s/app/suitecrm.yaml:42` + `cronjob.yaml:26`).
+2. **Image** `suitecrm:7.15.2-r0` (Bitnami-style `X.Y.Z-rN` → tag GHCR `7.15.2-r0`, `7.15.2`, `7.15`, `7` senza `latest`) built and pushed to OVH Harbor / GHCR (`k8s/app/suitecrm.yaml:53` + `cronjob.yaml:26`).
 3. **Ingress controller** — install **one** of the two:
 
 **NGINX:**

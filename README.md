@@ -9,6 +9,8 @@ PHP-FPM via `proxy_fcgi`), all PHP extensions required by SuiteCRM, and the Suit
 `docker-entrypoint.sh`). It does **not** include a database — MariaDB is not part of
 this image.
 
+**Versioning** (Bitnami-style): Git tag `vX.Y.Z-rN` → Docker tags `X.Y.Z-rN`, `X.Y.Z`, `X.Y`, `X` (senza `latest`). Esempio: `v7.15.2-r0` → `7.15.2-r0`, `7.15.2`, `7.15`, `7`; `v7.15.2-r1` aggiorna gli alias flottanti alla revisione `r1`; `v7.15.3-r0` resetta `r` a `0`. `SUITECRM_VERSION` (i primi 3 numeri) è passato come `build-arg` in CI (`Dockerfile:4`).
+
 **`compose.yml`**: orchestrates the full stack — the `app` service (built from this
 image) plus a separate `db` service (`mariadb:11.4`), the network between them, the
 persistent volumes (`db_data`, `app_data`), port mapping (`8080:80`), and the
@@ -114,8 +116,10 @@ docker compose -f compose.yml -f compose.it.yml up -d
 ## Build without Compose
 
 ```bash
-docker build -t suitecrm:7.15.2 .
-docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.2
+# Build locale: SUITECRM_VERSION è estratto dal tag vX.Y.Z-rN in CI; in locale passalo esplicitamente
+docker build --build-arg SUITECRM_VERSION=7.15.2 -t suitecrm:7.15.2-r0 .
+docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.2-r0
+# Tag GHCR pubblicati da CI (senza latest): 7.15.2-r0, 7.15.2, 7.15, 7
 ```
 
 ## Volumes

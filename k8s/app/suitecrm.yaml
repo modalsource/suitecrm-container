@@ -51,10 +51,10 @@ spec:
       containers:
         - name: suitecrm
           # REPLACE with the image pushed to OVH registry / Docker Hub / GHCR.
-          # Example:
-          #   docker build -t harbor.gra7.container-registry.ovh.net/<project>/suitecrm:7.15.2 .
-          #   docker push harbor.gra7.container-registry.ovh.net/<project>/suitecrm:7.15.2
-          image: suitecrm:7.15.2
+          # Example (Bitnami-style vX.Y.Z-rN -> 7.15.2-r0, 7.15.2, 7.15, 7 senza latest):
+          #   docker build --build-arg SUITECRM_VERSION=7.15.2 -t harbor.gra7.container-registry.ovh.net/<project>/suitecrm:7.15.2-r0 .
+          #   docker push harbor.gra7.container-registry.ovh.net/<project>/suitecrm:7.15.2-r0
+          image: suitecrm:7.15.2-r0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
