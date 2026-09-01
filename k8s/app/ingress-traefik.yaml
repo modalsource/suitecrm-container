@@ -1,0 +1,122 @@
+# Traefik Ingress for OVH Managed Kubernetes.
+#
+# Controller: Traefik (alternative to NGINX, often available by default on OVH MKS)
+# One-time installation per cluster — pick ONE of the two options:
+#
+# Option A — Official Traefik (recommended if you don't have an ingress yet):
+#   helm repo add traefik https://traefik.github.io/charts
+#   helm repo update
+#   helm upgrade --install traefik traefik/traefik \
+#     --namespace traefik --create-namespace \
+#     --set service.type=LoadBalancer \
+#     --set ports.web.exposedPort=80 \
+#     --set ports.websecure.exposedPort=443
+#   # OVH creates an Octavia LB; IP: kubectl get svc -n traefik traefik
+#
+# Option B — OVH MKS with Traefik already integrated: check
+#   kubectl get pods -A | grep traefik
+#   kubectl get ingressclass
+#   # if you see ingressClass `traefik`, no further install is needed.
+#
+# TLS: two options
+#   1) cert-manager + ClusterIssuer (same as NGINX, recommended — see below)
+#   2) Traefik native certResolver (uncomment router.tls.certresolver annotation)
+#
+# Key differences vs NGINX (k8s/app/ingress-nginx.yaml):
+#   - ingressClassName: traefik (not nginx)
+#   - NGINX annotations (proxy-body-size/timeout) are NOT needed: Traefik does not
+#     limit body size by default, but you can enforce 100M with buffering Middleware (defined below)
+#   - Timeouts are handled via Middleware / entryPoints, not nginx annotations
+#   - HTTP->HTTPS redirect via redirectScheme Middleware (optional, below)
+#
+# Use this file if you chose Traefik:
+#   kubectl apply -f k8s/app/ingress-traefik.yaml
+#   # or via Kustomize: kubectl apply -k k8s/overlays/traefik
+#
+# Replace suitecrm.example.com and point the DNS A record to the OVH external IP.
+---
+# Traefik Middleware: limit body to 100M (= SuiteCRM upload_max_filesize)
+# and optional HTTP->HTTPS redirect. Requires Traefik CRD (traefik.io/v1alpha1
+# on Traefik v3, traefik.containo.us/v1alpha1 on v2 — traefik.io works on recent versions).
+# If you don't need limits, you can omit the middlewares annotation on the Ingress.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: suitecrm-buffer
+  namespace: suitecrm
+  labels:
+    app.kubernetes.io/name: suitecrm
+    app.kubernetes.io/component: app
+spec:
+  buffering:
+    maxRequestBodyBytes: 104857600 # 100M
+    memRequestBodyBytes: 2097152   # 2M in RAM, rest on disk
+    retryExpression: "IsNetworkError() && Attempts() < 2"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: suitecrm-redirect-https
+  namespace: suitecrm
+  labels:
+    app.kubernetes.io/name: suitecrm
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: suitecrm
+  namespace: suitecrm
+  labels:
+    app.kubernetes.io/name: suitecrm
+    app.kubernetes.io/component: app
+  annotations:
+    # Traefik-specific
+    # Apply 100M buffering (optional but recommended for parity with NGINX)
+    traefik.ingress.kubernetes.io/router.middlewares: suitecrm-buffer@kubernetescrd
+    # For HTTP->HTTPS redirect uncomment and add to router middlewares:
+    # traefik.ingress.kubernetes.io/router.middlewares: suitecrm-buffer@kubernetescrd,suitecrm-redirect-https@kubernetescrd
+    # If you use Traefik native ACME instead of cert-manager, uncomment:
+    # traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    # If you use cert-manager (recommended, same as NGINX), uncomment:
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Traefik entryPoints — optional, depends on your Traefik installation
+    # traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: suitecrm.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: suitecrm
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - suitecrm.example.com
+      secretName: suitecrm-tls
+---
+# cert-manager ClusterIssuer (identical to NGINX, works with both).
+# Uncomment if you use cert-manager. Leave commented if you use Traefik certResolver.
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: admin@example.com # <-- CHANGE
+#     privateKeySecretRef:
+#       name: letsencrypt-prod
+#     solvers:
+#       - http01:
+#           ingress:
+#             class: traefik

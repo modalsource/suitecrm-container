@@ -1,0 +1,22 @@
+# PVC for SuiteCRM on OVH Managed Kubernetes.
+# OVH CSI Cinder StorageClasses:
+#   - csi-cinder-high-speed       -> SSD (recommended)
+#   - csi-cinder-classic          -> HDD
+#   - csi-cinder-high-speed-gen2  -> only in some regions (e.g. GRA)
+# Check: kubectl get storageclasses
+# NOTE: Cinder = RWO. For scaling >1 replica you need RWX (OVH NAS-HA / Manila) — see README.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: suitecrm-app-data
+  namespace: suitecrm
+  labels:
+    app.kubernetes.io/name: suitecrm
+    app.kubernetes.io/component: app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: csi-cinder-high-speed
+  resources:
+    requests:
+      storage: 10Gi

@@ -1,0 +1,26 @@
+# SuiteCRM base — without Ingress.
+# Choose the Ingress based on your OVH cluster controller:
+#   NGINX   -> k8s/app/ingress-nginx.yaml   (kustomize: k8s/overlays/nginx  or  k8s/overlays/app-nginx)
+#   Traefik -> k8s/app/ingress-traefik.yaml (kustomize: k8s/overlays/traefik or k8s/overlays/app-traefik)
+# See k8s/README.md > Ingress Choice.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: suitecrm
+
+resources:
+  - pvc.yaml
+  - secret.yaml
+  - suitecrm.yaml
+  - cronjob.yaml
+  # Ingress NOT included here to keep the base agnostic.
+  # Add it in the overlay or apply directly:
+  #   kubectl apply -k k8s/overlays/nginx
+  #   kubectl apply -k k8s/overlays/traefik
+  # or:
+  #   kubectl apply -f k8s/app/ingress-nginx.yaml
+  #   kubectl apply -f k8s/app/ingress-traefik.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: suitecrm-app

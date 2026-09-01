@@ -53,6 +53,34 @@ services:
       db:
         condition: service_healthy
 
+  cron:
+    build: .
+    # Sidecar per Schedulers SuiteCRM - replica la riga richiesta dalla doc:
+    # * * * * * cd /var/www/html; php -f cron.php > /dev/null 2>&1
+    # Usa la stessa immagine/volume dell'app, esegue cron.php ogni 60s come www-data.
+    # Stessa logica di k8s/cronjob.yaml, ma come loop (senza crond) per non richiedere
+    # pacchetti extra nell'immagine.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "SuiteCRM cron sidecar started (schedule: * * * * * -> cron.php)"
+        while true; do
+          if [ -f /var/www/html/config.php ]; then
+            su www-data -s /bin/sh -c "cd /var/www/html && php -f cron.php" || echo "cron.php failed at $$(date)" >&2
+          else
+            echo "$$(date): config.php not found, skipping cron run"
+          fi
+          sleep 60
+        done
+    volumes:
+      - app_data:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   db_data:
   app_data:

@@ -1,0 +1,20 @@
+# Legacy full stack — alias to overlays/nginx for backwards compatibility.
+# Choose the Ingress explicitly:
+#   NGINX   -> kubectl apply -k k8s/overlays/nginx       (full-stack) or k8s/overlays/app-nginx (app only)
+#   Traefik -> kubectl apply -k k8s/overlays/traefik     (full-stack) or k8s/overlays/app-traefik (app only)
+# For external DB (Percona, OVH Cloud DB) use the `app-*` overlays and point
+# SUITECRM_INSTALL_DB_HOST to your DB (see k8s/README.md).
+#
+# This file keeps the previous behavior (NGINX) for `kubectl apply -k k8s/`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - app/
+  - app/ingress-nginx.yaml
+  - database/mariadb/
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: suitecrm-stack

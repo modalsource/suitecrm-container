@@ -1,0 +1,18 @@
+# Traefik full-stack overlay: app + Traefik Ingress + in-cluster MariaDB.
+# Usage:
+#   kubectl apply -k k8s/overlays/traefik
+# Requires Traefik installed on OVH MKS (see k8s/app/ingress-traefik.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: suitecrm
+
+resources:
+  - ../../namespace.yaml
+  - ../../app
+  - ../../app/ingress-traefik.yaml
+  - ../../database/mariadb
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: suitecrm-stack-traefik

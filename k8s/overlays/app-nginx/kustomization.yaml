@@ -1,0 +1,18 @@
+# NGINX app-only overlay: SuiteCRM + NGINX Ingress (without in-cluster DB).
+# For external DB: Percona, OVH Cloud DB, etc.
+# Usage:
+#   kubectl apply -k k8s/overlays/app-nginx
+# Configure SUITECRM_INSTALL_DB_HOST in k8s/app/suitecrm.yaml to your DB.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: suitecrm
+
+resources:
+  - ../../namespace.yaml
+  - ../../app
+  - ../../app/ingress-nginx.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: suitecrm-app-nginx

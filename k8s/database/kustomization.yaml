@@ -1,0 +1,12 @@
+# Aggregated kustomization for supported databases.
+# By default only MariaDB is included (reference example).
+# If you use Percona / other external DB, DO NOT include this base:
+# deploy only k8s/app and configure SUITECRM_INSTALL_DB_HOST to your DB.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - mariadb/
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize

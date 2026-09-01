@@ -1,0 +1,77 @@
+# NGINX Ingress for OVH Managed Kubernetes.
+#
+# Controller: ingress-nginx (recommended on OVH, most widely used)
+# One-time installation per cluster:
+#   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+#   helm repo update
+#   helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+#     --namespace ingress-nginx --create-namespace \
+#     --set controller.service.type=LoadBalancer
+# OVH will create an Octavia Load Balancer in front of the controller.
+# External IP: kubectl get svc -n ingress-nginx ingress-nginx-controller
+#
+# Optional TLS with cert-manager + Let's Encrypt:
+#   helm repo add jetstack https://charts.jetstack.io
+#   helm upgrade --install cert-manager jetstack/cert-manager \
+#     --namespace cert-manager --create-namespace --set installCRDs=true
+# Then uncomment the ClusterIssuer below and the cert-manager.io/cluster-issuer annotation.
+#
+# Use this file if you chose NGINX:
+#   kubectl apply -f k8s/app/ingress-nginx.yaml
+#   # or via Kustomize: kubectl apply -k k8s/overlays/nginx
+#
+# Replace suitecrm.example.com with your domain and point the DNS A record to the OVH LB IP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: suitecrm
+  namespace: suitecrm
+  labels:
+    app.kubernetes.io/name: suitecrm
+    app.kubernetes.io/component: app
+  annotations:
+    # NGINX-specific
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m" # = SuiteCRM upload_max_filesize
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "16k"
+    # If you use cert-manager, uncomment:
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # To force HTTP->HTTPS redirect with NGINX (optional):
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: suitecrm.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: suitecrm
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - suitecrm.example.com
+      secretName: suitecrm-tls
+---
+# Global ClusterIssuer for Let's Encrypt (uncomment and set email).
+# Requires cert-manager. Works with any ingressClass (nginx/traefik).
+# ---
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: admin@example.com # <-- CHANGE
+#     privateKeySecretRef:
+#       name: letsencrypt-prod
+#     solvers:
+#       - http01:
+#           ingress:
+#             class: nginx
