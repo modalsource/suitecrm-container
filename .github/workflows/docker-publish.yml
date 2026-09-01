@@ -117,3 +117,18 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: trivy-results.sarif
+
+  release:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub Release with auto-generated notes
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          # tag is taken from GITHUB_REF_NAME (v7.15.2-rN), manual bump stays manual

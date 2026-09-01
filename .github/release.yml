@@ -1,0 +1,43 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - dependabot[bot]
+      - github-actions[bot]
+  categories:
+    - title: Features
+      labels:
+        - feature
+        - feat
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - fix
+        - bug
+        - bugfix
+    - title: Security
+      labels:
+        - security
+        - sec
+    - title: Documentation
+      labels:
+        - docs
+        - documentation
+    - title: Maintenance
+      labels:
+        - chore
+        - ci
+        - build
+        - deps
+        - dependency
+        - refactor
+        - perf
+        - test
+    - title: Kubernetes
+      labels:
+        - k8s
+        - kubernetes
+    - title: Other Changes
+      labels:
+        - "*"
