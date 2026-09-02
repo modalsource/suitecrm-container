@@ -1,176 +1,94 @@
-# SuiteCRM on OVH Managed Kubernetes
+# SuiteCRM on Kubernetes
 
-Plain-YAML manifests for **OVHcloud Managed Kubernetes Service (MKS)**.
-The stack is split into two independent axes:
+Two deployment paths live under `k8s/`:
 
-1. **Database** — `database/mariadb` (example) vs **Percona/external** (bring your own, not included)
-2. **Ingress** — **NGINX** vs **Traefik** (differentiated manifests)
+## 1. `k8s/` - plain YAML + Helm values (recommended)
+
+A single generic SuiteCRM instance backed by Percona MySQL. No Kustomize,
+no cluster-specific assumptions: replace every `<...>` placeholder before applying.
 
 ```
 k8s/
-├── namespace.yaml
-├── kustomization.yaml                 # legacy alias -> NGINX full-stack (see overlays/)
-├── app/                              # SuiteCRM base (without Ingress, agnostic)
-│   ├── kustomization.yaml            # pvc + secret + suitecrm + cronjob
-│   ├── pvc.yaml
-│   ├── secret.yaml                   # db-password + admin password
-│   ├── suitecrm.yaml                 # configurable DB host
-│   ├── cronjob.yaml
-│   ├── ingress-nginx.yaml            # IngressClass nginx + nginx annotations
-│   └── ingress-traefik.yaml          # IngressClass traefik + Middleware buffering
-├── database/
-│   └── mariadb/                      # example MariaDB 11.4
-│       ├── pvc.yaml, secret.yaml, mariadb.yaml
-└── overlays/                         # EXPLICIT ingress + stack choice
-    ├── nginx/kustomization.yaml      # app + ingress-nginx + mariadb
-    ├── traefik/kustomization.yaml    # app + ingress-traefik + mariadb
-    ├── app-nginx/kustomization.yaml  # app + ingress-nginx (external DB)
-    └── app-traefik/kustomization.yaml# app + ingress-traefik (external DB)
+├── README.md             # this runbook
+├── percona-values.yaml   # Percona MySQL values (percona/ps-db 1.1.0)
+├── db-init-job.yaml      # creates the schema + user (idempotent)
+├── suitecrm.yaml         # Deployment + Service + PVC
+├── cronjob.yaml          # SuiteCRM scheduler (cron.php every minute)
+└── ingress.yaml          # Ingress with cert-manager TLS
 ```
 
-## Ingress Choice: NGINX vs Traefik
-
-On **OVH MKS** both create an **Octavia Load Balancer** in front of the controller, but installation and annotations differ.
-
-| | **NGINX** (`ingress-nginx.yaml`) | **Traefik** (`ingress-traefik.yaml`) |
-|---|---|---|
-| **IngressClass** | `nginx` | `traefik` |
-| **Install** | `helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --set controller.service.type=LoadBalancer` | `helm install traefik traefik/traefik -n traefik --set service.type=LoadBalancer` or use Traefik already present on MKS (`kubectl get ingressclass`) |
-| **Body limit 100M** | `nginx.ingress.kubernetes.io/proxy-body-size: "100m"` | Middleware `buffering.maxRequestBodyBytes: 104857600` (included) — Traefik does NOT limit by default |
-| **Timeout 600s** | `proxy-read/send-timeout: "600"` | Handled via entryPoints/Middleware (no annotation needed) |
-| **TLS** | `cert-manager.io/cluster-issuer: letsencrypt-prod` + `spec.tls` | Same with cert-manager **or** `traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt` (Traefik native) |
-| **Redirect HTTP→HTTPS** | `nginx.ingress.kubernetes.io/ssl-redirect: "true"` | Middleware `redirectScheme` (`suitecrm-redirect-https`) |
-| **File** | `k8s/app/ingress-nginx.yaml:1` | `k8s/app/ingress-traefik.yaml:1` (+ 2 Middlewares) |
-
-**Which one to choose on OVH?**
-- **NGINX** recommended if starting from scratch — more OVH examples, best cert-manager compatibility.
-- **Traefik** if your OVH cluster already exposes it by default or you use other Traefik features (Middleware, ForwardAuth, etc.).
-
-Both expose the same `host: suitecrm.example.com` to `Service/suitecrm:80` and require a DNS A record pointing to the OVH LB external IP.
-
-## Database Choice
-
-### A) MariaDB in-cluster (example)
+### Runbook
 
 ```bash
-vi k8s/app/secret.yaml              # db-password
-vi k8s/database/mariadb/secret.yaml # mysql-password (= db-password) + mysql-root-password
-# Full-stack NGINX:
-kubectl apply -k k8s/overlays/nginx
-# Full-stack Traefik:
-kubectl apply -k k8s/overlays/traefik
-```
+# Replace: <namespace> <storage-class> <db-host> <db-name> <db-user>
+#          <db-root-secret> <hostname> <ingress-class> <cluster-issuer> <tls-secret>
+# Percona-only placeholders: <release> (helm release name), <db-host> is typically
+# <release>-ps-db-router.<namespace>.svc.cluster.local, root password lives in
+# <release>-ps-db-secrets.
 
-### B) Percona / OVH Cloud DB / external
+# 1. Namespace and secrets (never commit values)
+kubectl create namespace <namespace>
+kubectl create secret generic suitecrm-secrets \
+  --from-literal=db-password="$(openssl rand -hex 20)" \
+  --from-literal=suitecrm-admin-password="$(openssl rand -hex 16)" \
+  -n <namespace>
 
-Do not deploy `k8s/database/mariadb`. Bring your own DB and point `SUITECRM_INSTALL_DB_HOST`:
-
-```bash
-vi k8s/app/secret.yaml   # db-password
-vi k8s/app/suitecrm.yaml # SUITECRM_INSTALL_DB_HOST/PORT/NAME/USER
-# App only + Ingress:
-kubectl apply -k k8s/overlays/app-nginx   # or app-traefik
-```
-
-## OVH Prerequisites
-
-1. **MKS Cluster** (≥ 1.29) + kubeconfig + `kubectl get storageclasses` (`csi-cinder-high-speed` recommended).
-2. **Image** `suitecrm:7.15.2-r0` (Bitnami-style `X.Y.Z-rN` → tag GHCR `7.15.2-r0`, `7.15.2`, `7.15`, `7` senza `latest`) built and pushed to OVH Harbor / GHCR (`k8s/app/suitecrm.yaml:53` + `cronjob.yaml:26`).
-3. **Ingress controller** — install **one** of the two:
-
-**NGINX:**
-```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+# 2. Percona MySQL operator + cluster
+helm repo add percona https://percona.github.io/percona-helm-charts/
 helm repo update
-helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx --create-namespace \
-  --set controller.service.type=LoadBalancer
-kubectl get svc -n ingress-nginx ingress-nginx-controller --watch
+helm upgrade --install ps-operator percona/ps-operator --version=1.1.0 -n <namespace>
+helm upgrade --install <release> percona/ps-db --version=1.1.0 \
+  -n <namespace> -f percona-values.yaml
+kubectl wait ps <release>-ps-db -n <namespace> --for=condition=Ready --timeout=600s
+
+# 3. Schema and user
+kubectl apply -n <namespace> -f db-init-job.yaml
+kubectl wait job suitecrm-db-init -n <namespace> --for=condition=Complete --timeout=300s
+
+# 4. Application (silent install on first boot)
+kubectl apply -n <namespace> -f suitecrm.yaml
+kubectl wait pod -l app.kubernetes.io/name=suitecrm -n <namespace> \
+  --for=condition=Ready --timeout=600s
+
+# 5. Scheduler and Ingress
+kubectl apply -n <namespace> -f cronjob.yaml -f ingress.yaml
 ```
 
-**Traefik:**
-```bash
-helm repo add traefik https://traefik.github.io/charts
-helm repo update
-helm upgrade --install traefik traefik/traefik \
-  --namespace traefik --create-namespace \
-  --set service.type=LoadBalancer
-kubectl get svc -n traefik traefik --watch
-# check: kubectl get ingressclass
-```
-
-4. **(Optional) cert-manager** for Let's Encrypt TLS (works with both):
-```bash
-helm repo add jetstack https://charts.jetstack.io
-helm upgrade --install cert-manager jetstack/cert-manager \
-  --namespace cert-manager --create-namespace --set installCRDs=true
-# uncomment ClusterIssuer in k8s/app/ingress-nginx.yaml:54 or ingress-traefik.yaml:58
-# and annotation cert-manager.io/cluster-issuer on the Ingress
-```
-
-## Installation
-
-### 1. Configure secrets and domain
+### Credentials
 
 ```bash
-vi k8s/app/secret.yaml              # db-password, suitecrm-admin-password
-vi k8s/app/ingress-nginx.yaml       # host
-# or
-vi k8s/app/ingress-traefik.yaml     # host
-vi k8s/app/suitecrm.yaml            # SUITECRM_INSTALL_SITE_URL = https://suitecrm.example.com
+# Percona root (auto-generated by the operator)
+kubectl get secret <release>-ps-db-secrets -n <namespace> \
+  -o jsonpath='{.data.root}' | base64 -d
+
+# App DB password / admin password
+kubectl get secret suitecrm-secrets -n <namespace> \
+  -o jsonpath='{.data.db-password}' | base64 -d
+kubectl get secret suitecrm-secrets -n <namespace> \
+  -o jsonpath='{.data.suitecrm-admin-password}' | base64 -d
 ```
 
-### 2. Deploy
+### Notes
+
+- The image `ghcr.io/modalsource/suitecrm-container` is public: no pull secret needed.
+  Pull policy is `Always` (floating `7.15.2`). Pin `7.15.2-rN` for stability.
+- Silent install runs once per PVC, when `config.php` is absent. The db-init job
+  is idempotent; wiping the PVC means the schema needs recreating.
+- Scale stays at 1 replica (`Recreate`) because the docroot PVC is RWO.
+- Locale defaults to en_us/USD; see `compose.it.yml` for Italian values.
+- Multi-environment needs (e.g. main/rc/sandbox sharing one DB) are solved by
+  instantiating these files once per environment in your infra repo: per-env
+  `<db-name>`/`<db-user>`/secrets, per-env PVC and service names, per-env host in
+  `SUITECRM_INSTALL_SITE_URL` and the Ingress.
+
+## 2. `k8s/kustomize/` - Kustomize examples (generic)
+
+Kustomize-based examples with in-cluster MariaDB and NGINX/Traefik overlays,
+kept for standalone users:
 
 ```bash
-# App + DB + NGINX:
-kubectl apply -k k8s/overlays/nginx
-
-# App + DB + Traefik:
-kubectl apply -k k8s/overlays/traefik
-
-# App only (external DB) + NGINX:
-kubectl apply -k k8s/overlays/app-nginx
-
-# App only (external DB) + Traefik:
-kubectl apply -k k8s/overlays/app-traefik
-
-# Legacy (equivalent to overlays/nginx):
-kubectl apply -k k8s/
+kubectl apply -k k8s/kustomize/overlays/nginx
+kubectl apply -k k8s/kustomize/overlays/traefik
+kubectl apply -k k8s/kustomize/overlays/app-nginx
+kubectl apply -k k8s/kustomize/overlays/app-traefik
 ```
-
-Direct apply without Kustomize (e.g. Ingress only):
-```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/app/pvc.yaml -f k8s/app/secret.yaml -f k8s/app/suitecrm.yaml -f k8s/app/cronjob.yaml
-kubectl apply -f k8s/app/ingress-nginx.yaml   # or ingress-traefik.yaml
-```
-
-Wait for first boot (~30s extraction + 1-2 min silent install):
-```bash
-kubectl get pods -n suitecrm -w
-kubectl logs -f -n suitecrm deployment/suitecrm
-```
-
-### 3. Verify
-
-```bash
-kubectl get ingress -n suitecrm
-# NGINX: kubectl get svc -n ingress-nginx ingress-nginx-controller
-# Traefik: kubectl get svc -n traefik traefik
-curl -k https://suitecrm.example.com
-# login: admin / <suitecrm-admin-password>
-```
-
-## OVH Notes
-
-- **PVC RWO** (`csi-cinder-high-speed`) → `replicas: 1`, `strategy: Recreate`. For HA >1 you need RWX (OVH NAS-HA / Manila).
-- **Legacy `k8s/kustomization.yaml`** keeps `ingress-nginx` for backward compatibility; for Traefik use `k8s/overlays/traefik` explicitly.
-- **Traefik CRD** `traefik.io/v1alpha1` requires Traefik ≥ v3; on v2 use `traefik.containo.us/v1alpha1` (change `apiVersion` in the Middleware).
-
-## Troubleshooting
-
-- `Pending PVC`: `kubectl describe pvc -n suitecrm` — StorageClass / Cinder quota.
-- `Ingress 404`: check `ingressClassName` (`nginx` vs `traefik`) and controller `EXTERNAL-IP`.
-- `413 Body Too Large` (NGINX): check `proxy-body-size` on Ingress; (Traefik): check Middleware `suitecrm-buffer`.
-- `DB not reachable`: `kubectl exec -n suitecrm deploy/suitecrm -- nc -zv $SUITECRM_INSTALL_DB_HOST $SUITECRM_INSTALL_DB_PORT`.

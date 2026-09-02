@@ -125,3 +125,12 @@ docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.2-r0
 ## Volumes
 
 Database and SuiteCRM data are persisted (`db_data`, `app_data`). If `app_data` is empty on startup, SuiteCRM is automatically copied from the container.
+
+## Kubernetes
+
+Generic deployment manifests live under `k8s/`:
+
+- `k8s/` - plain YAML + Helm values (Percona `ps-db`), single generic instance with
+  placeholder values. See `k8s/README.md` for the runbook.
+- `k8s/kustomize/` - Kustomize examples with in-cluster MariaDB and NGINX/Traefik
+  overlays, for standalone users.
