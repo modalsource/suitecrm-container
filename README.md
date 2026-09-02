@@ -112,9 +112,11 @@ Notes:
 install. Run it with:
 
 The image bundles the official `it_IT` language pack (SuiteCRM community
-translations, 7.15 line). `docker-entrypoint.sh` overlays the language files onto
-`/var/www/html` on first extraction and registers the language with the installer
-via `install/lang.config.php`, so no manual Module Loader step is needed when
+translations, 7.15 line). `docker-entrypoint.sh` registers the language with the
+installer via `install/lang.config.php` for silent installs and then installs
+the pack through `ModuleInstall/PackageManager` (as `Admin > Module Loader` would),
+so it is tracked in `upgrade_history` and visible in `Admin > Module Loader` /
+`Admin > Upgrade History`. No manual Module Loader step is needed when
 `SUITECRM_INSTALL_DEFAULT_LANGUAGE=it_it`.
 
 ```bash

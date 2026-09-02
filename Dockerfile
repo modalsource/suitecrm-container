@@ -109,7 +109,7 @@ RUN set -eux; \
 # Copy SuiteCRM zip (estratto all'avvio da docker-entrypoint.sh)
 COPY --from=builder /suitecrm.zip /usr/src/suitecrm.zip
 
-# Italian language pack, overlaid onto /var/www/html by docker-entrypoint.sh
+# Italian language pack, installed via Module Loader by docker-entrypoint.sh
 COPY --from=builder /it_IT.zip /usr/src/it_IT.zip
 
 # PHP configuration overrides for SuiteCRM
