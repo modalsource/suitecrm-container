@@ -109,6 +109,12 @@ Notes:
 (`it_it`, Euro, `.`/`,` separators) on top of the base `compose.yml`, and enables silent
 install. Run it with:
 
+The image bundles the official `it_IT` language pack (SuiteCRM community
+translations, 7.15 line). `docker-entrypoint.sh` overlays the language files onto
+`/var/www/html` on first extraction and registers the language with the installer
+via `install/lang.config.php`, so no manual Module Loader step is needed when
+`SUITECRM_INSTALL_DEFAULT_LANGUAGE=it_it`.
+
 ```bash
 docker compose -f compose.yml -f compose.it.yml up -d
 ```

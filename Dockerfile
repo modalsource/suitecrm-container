@@ -8,6 +8,11 @@ RUN apk add --no-cache curl
 RUN curl -fsSL -o /suitecrm.zip \
     "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip"
 
+# Italian language pack, official SuiteCRM community translations. Released per
+# SuiteCRM minor line (7.15), not per patch version.
+RUN curl -fsSL -o /it_IT.zip \
+    "https://sourceforge.net/projects/suitecrmtranslations/files/7.15/it_IT_SuiteCRM_lang_7.15.zip/download"
+
 # Stage 2: PHP 8.4 Alpine + Apache httpd + PHP-FPM
 FROM php:8.4-fpm-alpine
 
@@ -105,6 +110,9 @@ RUN set -eux; \
 
 # Copy SuiteCRM zip (estratto all'avvio da docker-entrypoint.sh)
 COPY --from=builder /suitecrm.zip /usr/src/suitecrm.zip
+
+# Italian language pack, overlaid onto /var/www/html by docker-entrypoint.sh
+COPY --from=builder /it_IT.zip /usr/src/it_IT.zip
 
 # PHP configuration overrides for SuiteCRM
 RUN { \
