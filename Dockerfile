@@ -1,9 +1,7 @@
 # Stage 1: Download SuiteCRM zip
-FROM alpine:3.24 AS builder
+FROM alpine/curl:latest AS builder
 
 ARG SUITECRM_VERSION=7.15.2
-
-RUN apk add --no-cache curl
 
 RUN curl -fsSL -o /suitecrm.zip \
     "https://github.com/SuiteCRM/SuiteCRM/releases/download/v${SUITECRM_VERSION}/SuiteCRM-${SUITECRM_VERSION}.zip"
