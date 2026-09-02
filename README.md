@@ -70,6 +70,8 @@ Also silent-install-only (see note above).
 |---|---|---|
 | `SUITECRM_INSTALL_DEFAULT_LANGUAGE` | `en_us` | Default language pack code (e.g. `it_it`, `de_de`) assigned to new users/the system default |
 | `SUITECRM_INSTALL_DEFAULT_CHARSET` | `UTF-8` | Default charset |
+| `SUITECRM_INSTALL_DEFAULT_DATE_FORMAT` | `m/d/Y` | Default date format (`m/d/Y`, `d/m/Y`, `Y-m-d`, etc.) — `install/install_utils.php:1682`, `performSetup.php:629` |
+| `SUITECRM_INSTALL_DEFAULT_TIME_FORMAT` | `h:ia` | Default time format (`h:ia`, `H:i`, `H:i:s`, etc.) — `install/install_utils.php:1682`, `performSetup.php:632` |
 | `SUITECRM_INSTALL_CURRENCY_NAME` | `US Dollar` | Default currency name |
 | `SUITECRM_INSTALL_CURRENCY_SYMBOL` | `$` | Default currency symbol |
 | `SUITECRM_INSTALL_CURRENCY_ISO4217` | `USD` | Default currency ISO 4217 code |

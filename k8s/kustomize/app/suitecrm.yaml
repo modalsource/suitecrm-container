@@ -93,6 +93,10 @@ spec:
               value: "en_us"
             - name: SUITECRM_INSTALL_DEFAULT_CHARSET
               value: "UTF-8"
+            - name: SUITECRM_INSTALL_DEFAULT_DATE_FORMAT
+              value: "m/d/Y"
+            - name: SUITECRM_INSTALL_DEFAULT_TIME_FORMAT
+              value: "h:ia"
             - name: SUITECRM_INSTALL_CURRENCY_NAME
               value: "US Dollar"
             - name: SUITECRM_INSTALL_CURRENCY_SYMBOL

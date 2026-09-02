@@ -17,9 +17,11 @@ SUITECRM_INSTALL_SYSTEM_NAME="${SUITECRM_INSTALL_SYSTEM_NAME:-SuiteCRM}"
 SUITECRM_INSTALL_ADMIN_PASSWORD="${SUITECRM_INSTALL_ADMIN_PASSWORD:-admin}"
 SUITECRM_INSTALL_DEMO_DATA="${SUITECRM_INSTALL_DEMO_DATA:-no}"
 
-# Locale / currency (also silent-install-only, applied via config_si.php)
+# Locale / currency / date-time (also silent-install-only, applied via config_si.php)
 SUITECRM_INSTALL_DEFAULT_LANGUAGE="${SUITECRM_INSTALL_DEFAULT_LANGUAGE:-en_us}"
 SUITECRM_INSTALL_DEFAULT_CHARSET="${SUITECRM_INSTALL_DEFAULT_CHARSET:-UTF-8}"
+SUITECRM_INSTALL_DEFAULT_DATE_FORMAT="${SUITECRM_INSTALL_DEFAULT_DATE_FORMAT:-m/d/Y}"
+SUITECRM_INSTALL_DEFAULT_TIME_FORMAT="${SUITECRM_INSTALL_DEFAULT_TIME_FORMAT:-h:ia}"
 SUITECRM_INSTALL_CURRENCY_NAME="${SUITECRM_INSTALL_CURRENCY_NAME:-US Dollar}"
 SUITECRM_INSTALL_CURRENCY_SYMBOL="${SUITECRM_INSTALL_CURRENCY_SYMBOL:-\$}"
 SUITECRM_INSTALL_CURRENCY_ISO4217="${SUITECRM_INSTALL_CURRENCY_ISO4217:-USD}"
@@ -109,6 +111,8 @@ PHP
     demo_data_esc=$(escape_php_string "$SUITECRM_INSTALL_DEMO_DATA")
     default_language_esc=$(escape_php_string "$SUITECRM_INSTALL_DEFAULT_LANGUAGE")
     default_charset_esc=$(escape_php_string "$SUITECRM_INSTALL_DEFAULT_CHARSET")
+    default_date_format_esc=$(escape_php_string "$SUITECRM_INSTALL_DEFAULT_DATE_FORMAT")
+    default_time_format_esc=$(escape_php_string "$SUITECRM_INSTALL_DEFAULT_TIME_FORMAT")
     currency_name_esc=$(escape_php_string "$SUITECRM_INSTALL_CURRENCY_NAME")
     currency_symbol_esc=$(escape_php_string "$SUITECRM_INSTALL_CURRENCY_SYMBOL")
     currency_iso4217_esc=$(escape_php_string "$SUITECRM_INSTALL_CURRENCY_ISO4217")
@@ -137,9 +141,11 @@ PHP
     'setup_site_admin_user_name' => 'admin',
     'setup_site_admin_password' => '${admin_pass_esc}',
     'setup_license_accept' => true,
-    // Locale & currency
+    // Locale, currency & date-time
     'default_language' => '${default_language_esc}',
     'default_charset' => '${default_charset_esc}',
+    'default_date_format' => '${default_date_format_esc}',
+    'default_time_format' => '${default_time_format_esc}',
     'default_currency_name' => '${currency_name_esc}',
     'default_currency_symbol' => '${currency_symbol_esc}',
     'default_currency_iso4217' => '${currency_iso4217_esc}',
