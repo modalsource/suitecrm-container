@@ -1,0 +1,53 @@
+# CronJob for the SuiteCRM Scheduler: cron.php must run every minute as
+# www-data from the docroot. Mounts the same RWO PVC as the Deployment;
+# with concurrencyPolicy: Forbid it never overlaps the app pod on the volume.
+# Image pull policy matches the Deployment (Always, floating 7.15.2 tag).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: suitecrm-cron
+  namespace: <namespace>
+  labels:
+    app.kubernetes.io/name: suitecrm
+    app.kubernetes.io/component: cron
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cron
+              image: ghcr.io/modalsource/suitecrm-container:7.15.2
+              imagePullPolicy: Always
+              command:
+                - sh
+                - -c
+                - |
+                  if [ ! -f /var/www/html/config.php ]; then
+                    echo "config.php not found, skipping cron run"
+                    exit 0
+                  fi
+                  if id www-data >/dev/null 2>&1; then
+                    su www-data -s /bin/sh -c "cd /var/www/html && php -f cron.php"
+                  else
+                    cd /var/www/html && php -f cron.php
+                  fi
+              volumeMounts:
+                - name: app-data
+                  mountPath: /var/www/html
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 512Mi
+          volumes:
+            - name: app-data
+              persistentVolumeClaim:
+                claimName: suitecrm-data

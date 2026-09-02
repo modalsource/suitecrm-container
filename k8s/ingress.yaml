@@ -1,0 +1,31 @@
+# Ingress for SuiteCRM.
+# Replace <hostname>, <ingress-class> (e.g. nginx or traefik),
+# <cluster-issuer> (e.g. letsencrypt-prod) and <tls-secret>.
+# Comment out the cert-manager annotation if TLS is managed elsewhere.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: suitecrm
+  namespace: <namespace>
+  annotations:
+    cert-manager.io/cluster-issuer: <cluster-issuer>
+    # Optional, per ingress controller:
+    # nginx.ingress.kubernetes.io/proxy-body-size: 100m
+    # traefik.ingress.kubernetes.io/router.middlewares: <middleware>
+spec:
+  ingressClassName: <ingress-class>
+  rules:
+    - host: <hostname>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: suitecrm
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - <hostname>
+      secretName: <tls-secret>

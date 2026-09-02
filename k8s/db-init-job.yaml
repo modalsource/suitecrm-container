@@ -1,0 +1,62 @@
+# One-shot Job: creates the SuiteCRM database and user (idempotent).
+# Requires a running MySQL (e.g. a Percona ps-db cluster behind the operator
+# router at <release>-ps-db-router.<namespace>.svc.cluster.local).
+# Root password comes from the operator-generated secret <release>-ps-db-secrets
+# (or any secret holding the root password).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: suitecrm-db-init
+  namespace: <namespace>
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mysql-client
+          image: percona/percona-server:8.4.0-1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              echo "Waiting for MySQL to be reachable on ${MYSQL_HOST}..."
+              for i in $(seq 1 60); do
+                if mysql -h "${MYSQL_HOST}" -u root -p"${MYSQL_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1; then
+                  echo "MySQL is up."
+                  break
+                fi
+                echo "  not ready yet ($i/60)..."
+                sleep 5
+              done
+              db_name="${DB_NAME}"
+              db_user="${DB_USER}"
+              echo "Creating database ${db_name} and user ${db_user} (idempotent)..."
+              mysql -h "${MYSQL_HOST}" -u root -p"${MYSQL_ROOT_PASSWORD}" <<SQL
+              CREATE DATABASE IF NOT EXISTS \`${db_name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+              CREATE USER IF NOT EXISTS '${db_user}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+              ALTER USER '${db_user}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+              GRANT ALL PRIVILEGES ON \`${db_name}\`.* TO '${db_user}'@'%';
+              FLUSH PRIVILEGES;
+              SQL
+              echo "Done."
+          env:
+            - name: MYSQL_HOST
+              value: <db-host>
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: <db-root-secret>
+                  key: root
+            - name: DB_NAME
+              value: <db-name>
+            - name: DB_USER
+              value: <db-user>
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: suitecrm-secrets
+                  key: db-password
