@@ -131,7 +131,7 @@ jobs:
 
       - name: Build Changelog (commit + PR, EN)
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v5
+        uses: mikepenz/release-changelog-builder-action@v6
         with:
           configuration: .github/changelog-builder.json
           # HYBRID = PRs + direct commits (needed for push diretti su main senza PR)
