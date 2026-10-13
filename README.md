@@ -153,8 +153,9 @@ with `severity: CRITICAL,HIGH` + `ignore-unfixed: true` (only findings with a fi
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `docker-pr.yml` | pull request on `main` | builds the image, squashes layers, scans and **fails the PR** on findings |
-| `docker-publish.yml` | tag `vX.Y.Z-rN` | builds/pushes to GHCR, scans and fails on findings |
+| `docker-publish.yml` | tag `vX.Y.Z-rN` (or `workflow_dispatch` on a tag) | builds/pushes to GHCR, scans and fails on findings |
 | `trivy-weekly.yml` | `schedule` (Mondays 06:00 UTC) + manual | re-scans the **published** image |
+| `auto-rebuild.yml` | `schedule` (Mondays 08:00 UTC) + manual | detects fixable vulns and publishes a bumped revision |
 
 The weekly job is a safety net: the published image is immutable, but the Trivy
 vulnerability DB keeps moving, so it catches CVEs disclosed after a release. It
@@ -162,3 +163,13 @@ scans the floating major tag (`ghcr.io/<repo>:7` by default, overridable via
 `workflow_dispatch`), uploads the SARIF report to the **Security** tab, and
 opens/updates a single issue (label `security`) instead of failing the run — the
 issue is closed automatically once a scan comes back clean.
+
+Only `CRITICAL,HIGH` findings gate the issue. Fixable `MEDIUM`/`LOW` findings are
+listed in an **informational** section of the issue and never affect the gate.
+
+`auto-rebuild.yml` closes the loop: when the published image has fixable
+`CRITICAL,HIGH` findings it bumps the revision (`vX.Y.Z-rN` → `vX.Y.Z-r(N+1)`),
+pushes the tag and publishes it (reusing `docker-publish.yml` via
+`workflow_dispatch`), then re-runs the weekly scan. A `workflow_dispatch` with
+`dry_run: true` (the default when launched manually) only reports the revision
+that would be created.
