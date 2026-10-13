@@ -144,3 +144,21 @@ Generic deployment manifests live under `k8s/`:
   placeholder values. See `k8s/README.md` for the runbook.
 - `k8s/kustomize/` - Kustomize examples with in-cluster MariaDB and NGINX/Traefik
   overlays, for standalone users.
+
+## Security scanning (CI)
+
+All workflows live in `.github/workflows/` and run [Trivy](https://github.com/aquasecurity/trivy)
+with `severity: CRITICAL,HIGH` + `ignore-unfixed: true` (only findings with a fix available):
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `docker-pr.yml` | pull request on `main` | builds the image, squashes layers, scans and **fails the PR** on findings |
+| `docker-publish.yml` | tag `vX.Y.Z-rN` | builds/pushes to GHCR, scans and fails on findings |
+| `trivy-weekly.yml` | `schedule` (Mondays 06:00 UTC) + manual | re-scans the **published** image |
+
+The weekly job is a safety net: the published image is immutable, but the Trivy
+vulnerability DB keeps moving, so it catches CVEs disclosed after a release. It
+scans the floating major tag (`ghcr.io/<repo>:7` by default, overridable via
+`workflow_dispatch`), uploads the SARIF report to the **Security** tab, and
+opens/updates a single issue (label `security`) instead of failing the run — the
+issue is closed automatically once a scan comes back clean.

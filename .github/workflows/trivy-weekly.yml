@@ -1,0 +1,135 @@
+name: Weekly - Trivy image scan
+
+# Weekly re-scan of the *published* image: the image content is fixed, but the
+# Trivy vulnerability DB keeps moving, so this catches CVEs disclosed after a
+# release. Tracked by a single issue that is opened/updated/closed automatically
+# instead of failing the run (no weekly failure email).
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag to scan (floating release tag published by docker-publish.yml)'
+        required: false
+        default: '7'
+
+concurrency:
+  group: trivy-weekly
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # Floating major tag tracks the latest release; override via workflow_dispatch.
+  SCAN_TAG: ${{ inputs.image_tag || '7' }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+      issues: write
+
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SCAN_TAG }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          # Never fail the run: findings are surfaced via the issue + Security tab.
+          exit-code: 0
+
+      - name: Generate vulnerability summary
+        id: report
+        if: always()
+        shell: bash
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SCAN_TAG }}
+          REPORT: ${{ github.workspace }}/trivy-report.json
+        run: |
+          set -euo pipefail
+
+          trivy image --format json \
+            --cache-dir "${{ github.workspace }}/.cache/trivy" \
+            --skip-db-update \
+            --skip-java-db-update \
+            -o "$REPORT" \
+            "$IMAGE"
+
+          # Count actionable vulns only, matching the CI policy (ignore-unfixed).
+          crit=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL" and ((.FixedVersion // "") != ""))] | length' "$REPORT")
+          high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH" and ((.FixedVersion // "") != ""))] | length' "$REPORT")
+          echo "crit=$crit" >> "$GITHUB_OUTPUT"
+          echo "high=$high" >> "$GITHUB_OUTPUT"
+          echo "total=$((crit + high))" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Trivy weekly scan"
+            echo ""
+            echo "Immagine: \`${IMAGE}\`"
+            echo ""
+            echo "Severity \`CRITICAL,HIGH\` con fix disponibile (\`ignore-unfixed\`). Totale: **${crit} CRITICAL / ${high} HIGH**."
+            echo ""
+            echo "| Target | Type | CRITICAL | HIGH | MEDIUM | LOW |"
+            echo "| ------ | ---- | -------- | ---- | ------ | --- |"
+            jq -r '
+              def fixable: (.FixedVersion // "") != "";
+              .Results[]? | select(.Vulnerabilities != null) |
+              "| \(.Target) | \(.Type) | \([.Vulnerabilities[] | select(.Severity == "CRITICAL" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "HIGH" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "MEDIUM" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "LOW" and fixable)] | length) |"' "$REPORT"
+            echo ""
+            echo "_Aggiornato automaticamente da \`.github/workflows/trivy-weekly.yml\`._"
+          } > scan-report.md
+
+          cat scan-report.md
+          cat scan-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4.38.2
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Open or update tracking issue
+        if: always() && steps.report.outputs.total != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOTAL: ${{ steps.report.outputs.total }}
+        run: |
+          set -euo pipefail
+
+          image="${REGISTRY}/${IMAGE_NAME}:${SCAN_TAG}"
+          title="[Trivy] Vulnerabilities in ${image}"
+
+          existing=$(gh issue list --state open --limit 100 \
+            --json number,title \
+            --jq ".[] | select(.title == \"${title}\") | .number" | head -n 1)
+
+          if [ "$TOTAL" -gt 0 ]; then
+            gh label create security --force \
+              --description "Security related" --color B60205 >/dev/null 2>&1 || true
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body-file scan-report.md
+            else
+              gh issue create --title "$title" --body-file scan-report.md --label security
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue comment "$existing" \
+              --body "Nessuna vulnerabilità CRITICAL/HIGH con fix disponibile nell'ultima scansione. Chiusura automatica."
+            gh issue close "$existing"
+          fi
