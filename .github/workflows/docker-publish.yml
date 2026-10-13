@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*.*.*-r*'
+  # Lets the auto-rebuild workflow publish a revision tag it just created: a tag
+  # pushed with GITHUB_TOKEN does not trigger workflows, but workflow_dispatch is
+  # the documented exception. The tag is passed via --ref, so GITHUB_REF_NAME
+  # (used by the "Parse versions" step) still resolves to vX.Y.Z-rN.
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io

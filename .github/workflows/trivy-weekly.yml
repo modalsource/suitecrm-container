@@ -71,26 +71,56 @@ jobs:
             -o "$REPORT" \
             "$IMAGE"
 
-          # Count actionable vulns only, matching the CI policy (ignore-unfixed).
+          # Gate: actionable CRITICAL/HIGH only, matching the CI policy (ignore-unfixed).
           crit=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL" and ((.FixedVersion // "") != ""))] | length' "$REPORT")
           high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH" and ((.FixedVersion // "") != ""))] | length' "$REPORT")
+          # Informational only: these never affect the gate below.
+          medium=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM" and ((.FixedVersion // "") != ""))] | length' "$REPORT")
+          low=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW" and ((.FixedVersion // "") != ""))] | length' "$REPORT")
           echo "crit=$crit" >> "$GITHUB_OUTPUT"
           echo "high=$high" >> "$GITHUB_OUTPUT"
           echo "total=$((crit + high))" >> "$GITHUB_OUTPUT"
+          echo "medium=$medium" >> "$GITHUB_OUTPUT"
+          echo "low=$low" >> "$GITHUB_OUTPUT"
 
           {
             echo "## Trivy weekly scan"
             echo ""
             echo "Immagine: \`${IMAGE}\`"
             echo ""
-            echo "Severity \`CRITICAL,HIGH\` con fix disponibile (\`ignore-unfixed\`). Totale: **${crit} CRITICAL / ${high} HIGH**."
+            echo "**Gate (blocking)** — severity \`CRITICAL,HIGH\` con fix disponibile (\`ignore-unfixed\`): **${crit} CRITICAL / ${high} HIGH**."
             echo ""
-            echo "| Target | Type | CRITICAL | HIGH | MEDIUM | LOW |"
-            echo "| ------ | ---- | -------- | ---- | ------ | --- |"
+            echo "| Target | Type | CRITICAL | HIGH |"
+            echo "| ------ | ---- | -------- | ---- |"
             jq -r '
               def fixable: (.FixedVersion // "") != "";
               .Results[]? | select(.Vulnerabilities != null) |
-              "| \(.Target) | \(.Type) | \([.Vulnerabilities[] | select(.Severity == "CRITICAL" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "HIGH" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "MEDIUM" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "LOW" and fixable)] | length) |"' "$REPORT"
+              "| \(.Target) | \(.Type) | \([.Vulnerabilities[] | select(.Severity == "CRITICAL" and fixable)] | length) | \([.Vulnerabilities[] | select(.Severity == "HIGH" and fixable)] | length) |"' "$REPORT"
+            echo ""
+            echo "### Informational (below gate) — \`MEDIUM\`/\`LOW\` fixabili"
+            echo ""
+            echo "Non influenza il gate né l'apertura/chiusura della issue. Totale: **${medium} MEDIUM / ${low} LOW**."
+            echo ""
+            rows=$(jq '
+              def fixable: (.FixedVersion // "") != "";
+              [ .Results[]?.Vulnerabilities[]? | select((.Severity == "MEDIUM" or .Severity == "LOW") and fixable) ]
+              | unique_by(.PkgName + "|" + .VulnerabilityID) | length' "$REPORT")
+            if [ "$rows" -gt 0 ]; then
+              echo "| Package | CVE | Severity | Installed → Fixed |"
+              echo "| ------- | --- | -------- | ----------------- |"
+              jq -r '
+                def fixable: (.FixedVersion // "") != "";
+                [ .Results[]?.Vulnerabilities[]? | select((.Severity == "MEDIUM" or .Severity == "LOW") and fixable) ]
+                | unique_by(.PkgName + "|" + .VulnerabilityID)
+                | sort_by(.PkgName, .VulnerabilityID)
+                | limit(50; .[]) | "| \(.PkgName) | \(.VulnerabilityID) | \(.Severity) | \(.InstalledVersion) → \(.FixedVersion) |"' "$REPORT"
+              if [ "$rows" -gt 50 ]; then
+                echo ""
+                echo "_…e altri $((rows - 50)) finding MEDIUM/LOW fixabili (lista troncata a 50)._"
+              fi
+            else
+              echo "_Nessun finding MEDIUM/LOW fixabile._"
+            fi
             echo ""
             echo "_Aggiornato automaticamente da \`.github/workflows/trivy-weekly.yml\`._"
           } > scan-report.md
