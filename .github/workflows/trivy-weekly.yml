@@ -109,6 +109,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No checkout in this job, so gh cannot infer the repo from the git
+          # remote: target it explicitly via --repo.
+          REPO: ${{ github.repository }}
           TOTAL: ${{ steps.report.outputs.total }}
         run: |
           set -euo pipefail
@@ -116,20 +119,20 @@ jobs:
           image="${REGISTRY}/${IMAGE_NAME}:${SCAN_TAG}"
           title="[Trivy] Vulnerabilities in ${image}"
 
-          existing=$(gh issue list --state open --limit 100 \
+          existing=$(gh issue list --repo "$REPO" --state open --limit 100 \
             --json number,title \
             --jq ".[] | select(.title == \"${title}\") | .number" | head -n 1)
 
           if [ "$TOTAL" -gt 0 ]; then
-            gh label create security --force \
+            gh label create security --repo "$REPO" --force \
               --description "Security related" --color B60205 >/dev/null 2>&1 || true
             if [ -n "$existing" ]; then
-              gh issue comment "$existing" --body-file scan-report.md
+              gh issue comment "$existing" --repo "$REPO" --body-file scan-report.md
             else
-              gh issue create --title "$title" --body-file scan-report.md --label security
+              gh issue create --repo "$REPO" --title "$title" --body-file scan-report.md --label security
             fi
           elif [ -n "$existing" ]; then
-            gh issue comment "$existing" \
+            gh issue comment "$existing" --repo "$REPO" \
               --body "Nessuna vulnerabilità CRITICAL/HIGH con fix disponibile nell'ultima scansione. Chiusura automatica."
-            gh issue close "$existing"
+            gh issue close "$existing" --repo "$REPO"
           fi
