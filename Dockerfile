@@ -12,7 +12,7 @@ RUN curl -fsSL -o /it_IT.zip \
     "https://sourceforge.net/projects/suitecrmtranslations/files/7.15/it_IT_SuiteCRM_lang_7.15.zip/download"
 
 # Stage 2: PHP 8.4 Alpine + Apache httpd + PHP-FPM
-FROM php:8.4-fpm-alpine
+FROM php:8.4.27-fpm-alpine3.24
 
 ARG SUITECRM_VERSION
 
