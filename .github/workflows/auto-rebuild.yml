@@ -102,7 +102,10 @@ jobs:
             exit 1
           fi
 
-          git tag -a "$NEXT" -m "Automated rebuild: fixable CRITICAL/HIGH in :${SCAN_TAG}"
+          # Actions runners have no git identity; `git tag -a` needs one.
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            tag -a "$NEXT" -m "Automated rebuild: fixable CRITICAL/HIGH in :${SCAN_TAG}"
           git push origin "$NEXT"
           echo "Pushed $NEXT"
 
