@@ -22,6 +22,8 @@ jobs:
           push: false
           load: true
           tags: ${{ github.repository }}:pr-${{ github.event.number }}
+          build-args: |
+            APK_UPGRADE_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Install docker-squash and squash layers
         run: |

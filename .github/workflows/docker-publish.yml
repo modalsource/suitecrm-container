@@ -84,6 +84,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             SUITECRM_VERSION=${{ steps.parse.outputs.suitecrm_version }}
+            APK_UPGRADE_CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0

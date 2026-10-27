@@ -18,7 +18,13 @@ ARG SUITECRM_VERSION
 
 # Runtime system dependencies (Alpine)
 # unzip serve all'estrazione in docker-entrypoint.sh
-RUN apk update && apk upgrade --no-cache \
+#
+# Alpine backports security fixes (e.g. curl, expat) without changing the pinned
+# base image. CI passes a unique value on every build so this layer is never
+# served from cache and `apk upgrade` always installs the patched packages.
+ARG APK_UPGRADE_CACHE_BUST=local
+RUN echo "apk upgrade cache-bust: ${APK_UPGRADE_CACHE_BUST}" \
+    && apk update && apk upgrade --no-cache \
     && apk add --no-cache \
         apache2 \
         apache2-proxy \
