@@ -71,7 +71,11 @@ RUN set -eux; \
     apk del .build-deps; \
     rm -rf /var/cache/apk/* /tmp/*
 
-# Enable Apache modules and configure for PHP-FPM + SuiteCRM
+# Enable Apache modules and configure for PHP-FPM + SuiteCRM.
+# The container runs as www-data (uid 82), so:
+#   - Listen 8080: unprivileged users cannot bind ports < 1024 (Kubernetes).
+#   - logs go to stdout/stderr: /var/log/apache2 is not writable by www-data.
+#   - PidFile stays /run/apache2/httpd.pid (see chown below).
 RUN set -eux; \
     sed -i 's/#LoadModule rewrite_module/LoadModule rewrite_module/' /etc/apache2/httpd.conf; \
     sed -i 's/#LoadModule proxy_module/LoadModule proxy_module/' /etc/apache2/httpd.conf; \
@@ -79,10 +83,20 @@ RUN set -eux; \
     sed -i 's/DirectoryIndex index.html/DirectoryIndex index.php index.html/' /etc/apache2/httpd.conf; \
     sed -i 's/^User apache/User www-data/' /etc/apache2/httpd.conf; \
     sed -i 's/^Group apache/Group www-data/' /etc/apache2/httpd.conf; \
-    sed -i 's/^#ServerName www.example.com:80/ServerName localhost:80/' /etc/apache2/httpd.conf; \
+    sed -i 's/^Listen 80/Listen 8080/' /etc/apache2/httpd.conf; \
+    sed -i 's/^#ServerName www.example.com:80/ServerName localhost:8080/' /etc/apache2/httpd.conf; \
+    sed -i 's|^ErrorLog logs/error.log|ErrorLog /proc/self/fd/2|' /etc/apache2/httpd.conf; \
+    sed -i 's|^[[:space:]]*CustomLog logs/access.log combined|    CustomLog /proc/self/fd/1 combined|' /etc/apache2/httpd.conf; \
     sed -i 's|/var/www/localhost/htdocs|/var/www/html|g' /etc/apache2/httpd.conf
 
-# PHP-FPM pool config (use same uid/gid as Apache)
+# PID file directory used by httpd (-k start/stop in the entrypoint).
+# Must be writable by the non-root runtime user.
+RUN mkdir -p /run/apache2 && chown www-data:www-data /run/apache2
+
+# PHP-FPM pool config (use same uid/gid as Apache).
+# When the container runs non-root these directives are ignored with a NOTICE;
+# they are kept so the image still works when explicitly started as root
+# (e.g. one-off volume repairs with `docker run --user 0`).
 RUN set -eux; \
     { \
         echo '[www]'; \
@@ -156,10 +170,19 @@ RUN rm -rf \
 
 WORKDIR /var/www/html
 
+# Docroot must be writable by the runtime user (the base image ships it as
+# www-data with mode 1777; drop the sticky world-writable bit).
+RUN chown www-data:www-data /var/www/html && chmod 775 /var/www/html
+
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Run as non-root by default: works with Kubernetes runAsNonRoot and with
+# Docker/Compose `user: "82:82"`. UID/GID 82 is Alpine's www-data, which is
+# already used by Apache and PHP-FPM.
+USER 82:82
+
 ENTRYPOINT ["docker-entrypoint.sh"]
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["httpd", "-D", "FOREGROUND"]

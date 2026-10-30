@@ -21,11 +21,23 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 82
+            runAsGroup: 82
+            fsGroup: 82
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: cron
               image: suitecrm:7.15.2-r0 # <-- same image as the Deployment (Bitnami-style rN)
               imagePullPolicy: IfNotPresent
-              # SuiteCRM cron.php must be run as www-data in the docroot
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              # The container already runs as www-data (UID 82): no su needed.
               command:
                 - sh
                 - -c
@@ -35,12 +47,7 @@ spec:
                     echo "config.php not found, skipping cron run"
                     exit 0
                   fi
-                  # Run scheduler as www-data if available, otherwise as current user
-                  if id www-data >/dev/null 2>&1; then
-                    su www-data -s /bin/sh -c "cd /var/www/html && php -f cron.php"
-                  else
-                    cd /var/www/html && php -f cron.php
-                  fi
+                  cd /var/www/html && php -f cron.php
               volumeMounts:
                 - name: app-data
                   mountPath: /var/www/html

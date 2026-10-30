@@ -1,6 +1,22 @@
 #!/bin/sh
 set -e
 
+# The image runs as www-data (uid/gid 82) by default. chown/chgrp/su only work
+# as root, so every privileged operation is guarded to keep the entrypoint
+# usable with `runAsNonRoot` (Kubernetes) and `user: "82:82"` (Compose).
+is_root() {
+    [ "$(id -u)" = "0" ]
+}
+
+# Run a command as the application user: drop privileges only when we are root.
+run_as_app() {
+    if is_root && id www-data >/dev/null 2>&1; then
+        su www-data -s /bin/sh -c "$1"
+    else
+        sh -c "$1"
+    fi
+}
+
 # ---- Silent install configuration ----
 # All SUITECRM_INSTALL_* variables below are ONLY read once, the first time the
 # container starts with an empty app_data volume (no config.php yet) AND
@@ -52,7 +68,9 @@ if [ ! -f /var/www/html/custom/private.key ] || [ ! -f /var/www/html/custom/publ
     openssl genrsa -out /var/www/html/custom/private.key 2048
     openssl rsa -in /var/www/html/custom/private.key -pubout -out /var/www/html/custom/public.key
     chmod 640 /var/www/html/custom/private.key
-    chgrp www-data /var/www/html/custom/private.key /var/www/html/custom/public.key
+    if is_root; then
+        chgrp www-data /var/www/html/custom/private.key /var/www/html/custom/public.key
+    fi
     echo "Keys generated."
 fi
 
@@ -61,13 +79,20 @@ cp -rp /var/www/html/custom/private.key /var/www/html/Api/V8/OAuth2/
 cp -rp /var/www/html/custom/public.key /var/www/html/Api/V8/OAuth2/
 echo "Keys copied."
 
-echo "Applying permissions on /var/www/html..."
-find /var/www/html -path '*/.git' -prune -o -print0 | xargs -0 chown www-data:www-data
-find /var/www/html -path '*/.git' -prune -o -type d -print0 | xargs -0 chmod 755
-find /var/www/html -path '*/.git' -prune -o -type f -print0 | xargs -0 chmod 644
-chmod -R 775 /var/www/html/cache /var/www/html/upload 2>/dev/null || true
-chmod 775 /var/www/html/config.php 2>/dev/null || true
-echo "Permissions applied."
+if is_root; then
+    echo "Applying permissions on /var/www/html..."
+    find /var/www/html -path '*/.git' -prune -o -print0 | xargs -0 chown www-data:www-data
+    find /var/www/html -path '*/.git' -prune -o -type d -print0 | xargs -0 chmod 755
+    find /var/www/html -path '*/.git' -prune -o -type f -print0 | xargs -0 chmod 644
+    chmod -R 775 /var/www/html/cache /var/www/html/upload 2>/dev/null || true
+    chmod 775 /var/www/html/config.php 2>/dev/null || true
+    echo "Permissions applied."
+else
+    # Files extracted as www-data are already owned by the runtime user;
+    # on Kubernetes the PVC is group-writable through fsGroup. Avoid chown/chmod
+    # here: as non-root they would fail on a pre-existing root-owned volume.
+    echo "Running as non-root (uid $(id -u)): skipping ownership normalization."
+fi
 
 # ---- Silent install ----
 # Uses SuiteCRM's built-in silent installer (config_si.php + install.php?goto=SilentInstall&cli=true).
@@ -92,7 +117,9 @@ $config['languages'] = array(
     'it_IT' => 'Italiano',
 );
 PHP
-        chown www-data:www-data /var/www/html/install/lang.config.php
+        if is_root; then
+            chown www-data:www-data /var/www/html/install/lang.config.php
+        fi
         echo "Registered the it_IT language pack with the installer."
     fi
 
@@ -154,7 +181,9 @@ PHP
     'disable_persistent_connections' => ${SUITECRM_INSTALL_DISABLE_PERSISTENT_CONNECTIONS},
 );
 PHP
-    chown www-data:www-data /var/www/html/config_si.php
+    if is_root; then
+        chown www-data:www-data /var/www/html/config_si.php
+    fi
     chmod 640 /var/www/html/config_si.php
 
     echo "Waiting for database ${SUITECRM_INSTALL_DB_HOST}:${SUITECRM_INSTALL_DB_PORT}..."
@@ -173,7 +202,7 @@ PHP
 
     ready=0
     for _ in $(seq 1 30); do
-        if curl -fsS -o /dev/null "http://127.0.0.1/install.php"; then
+        if curl -fsS -o /dev/null "http://127.0.0.1:8080/install.php"; then
             ready=1
             break
         fi
@@ -182,19 +211,33 @@ PHP
 
     if [ "$ready" = "1" ]; then
         echo "Running SuiteCRM silent installer..."
-        curl -fsS "http://127.0.0.1/install.php?goto=SilentInstall&cli=true" || \
+        curl -fsS "http://127.0.0.1:8080/install.php?goto=SilentInstall&cli=true" || \
             echo "WARNING: silent install HTTP request failed, check /var/www/html/suitecrm.log" >&2
     else
         echo "WARNING: Apache did not become ready in time, skipping silent install." >&2
     fi
 
-    httpd -k stop
+    # `httpd -k stop` returns before the server has exited; record the pid first
+    # and wait for it so the main Apache can bind 8080 without an "Address in
+    # use" race.
+    stop_pid=""
+    if [ -f /run/apache2/httpd.pid ]; then
+        stop_pid=$(cat /run/apache2/httpd.pid 2>/dev/null || true)
+    fi
+    httpd -k stop || true
+    stop_attempt=0
+    while [ -n "$stop_pid" ] && kill -0 "$stop_pid" 2>/dev/null && [ "$stop_attempt" -lt 30 ]; do
+        stop_attempt=$((stop_attempt + 1))
+        sleep 1
+    done
     rm -f /var/www/html/config_si.php
 
     if [ -f /var/www/html/config.php ]; then
-        chown www-data:www-data /var/www/html/config.php
-        chmod 775 /var/www/html/config.php
-        chown -R www-data:www-data /var/www/html/cache /var/www/html/custom /var/www/html/modules /var/www/html/upload 2>/dev/null || true
+        chmod 775 /var/www/html/config.php 2>/dev/null || true
+        if is_root; then
+            chown www-data:www-data /var/www/html/config.php
+            chown -R www-data:www-data /var/www/html/cache /var/www/html/custom /var/www/html/modules /var/www/html/upload 2>/dev/null || true
+        fi
         echo "Silent installation completed successfully."
         cat /var/www/html/config.php | grep -E "default_date_format|default_time_format" | sed 's/^/  config.php: /' || true
     else
@@ -267,14 +310,12 @@ if (!empty($current_user) && !empty($current_user->id)) {
     if ($changed) { $current_user->savePreferencesToDB(); echo "Admin preferences saved\n"; }
 }
 PHP
-        if id www-data >/dev/null 2>&1; then
-            su www-data -s /bin/sh -c "php /tmp/fix_locale.php" || echo "WARNING: locale fix failed" >&2
-        else
-            php /tmp/fix_locale.php || echo "WARNING: locale fix failed" >&2
-        fi
+        run_as_app "php /tmp/fix_locale.php" || echo "WARNING: locale fix failed" >&2
         rm -f /tmp/fix_locale.php
         # Re-apply perms if config changed
-        chown www-data:www-data /var/www/html/config.php /var/www/html/config_override.php 2>/dev/null || true
+        if is_root; then
+            chown www-data:www-data /var/www/html/config.php /var/www/html/config_override.php 2>/dev/null || true
+        fi
     else
         echo "Skipping locale fix: DB unreachable"
     fi
@@ -460,18 +501,16 @@ $repair = new RepairAndClear();
 $repair->repairAndClearAll(array('clearAll'), array('All'), true, false);
 echo "Module Loader installation of it_IT completed.\n";
 PHP
-        # run as www-data to keep file ownership correct
-        if id www-data >/dev/null 2>&1; then
-            su www-data -s /bin/sh -c "php /tmp/install_it_it.php" || echo "WARNING: Module Loader install for it_IT failed, check suitecrm.log" >&2
-        else
-            php /tmp/install_it_it.php || echo "WARNING: Module Loader install for it_IT failed, check suitecrm.log" >&2
-        fi
+        # run as www-data when root, otherwise as the current runtime user
+        run_as_app "php /tmp/install_it_it.php" || echo "WARNING: Module Loader install for it_IT failed, check suitecrm.log" >&2
         rm -f /tmp/install_it_it.php
-        # fix ownership after install (PackageManager creates files as www-data, but ensure)
-        chown -R www-data:www-data /var/www/html/upload 2>/dev/null || true
-        chown -R www-data:www-data /var/www/html/cache 2>/dev/null || true
-        chown www-data:www-data /var/www/html/config.php 2>/dev/null || true
-        chown www-data:www-data /var/www/html/config_override.php 2>/dev/null || true
+        # fix ownership after install (PackageManager creates files as www-data)
+        if is_root; then
+            chown -R www-data:www-data /var/www/html/upload 2>/dev/null || true
+            chown -R www-data:www-data /var/www/html/cache 2>/dev/null || true
+            chown www-data:www-data /var/www/html/config.php 2>/dev/null || true
+            chown www-data:www-data /var/www/html/config_override.php 2>/dev/null || true
+        fi
     else
         echo "Skipping it_IT Module Loader install: DB unreachable."
     fi

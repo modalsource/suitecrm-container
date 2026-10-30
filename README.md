@@ -13,7 +13,7 @@ this image.
 
 **`compose.yml`**: orchestrates the full stack — the `app` service (built from this
 image) plus a separate `db` service (`mariadb:11.4`), the network between them, the
-persistent volumes (`db_data`, `app_data`), port mapping (`8080:80`), and the
+persistent volumes (`db_data`, `app_data`), port mapping (`8080:8080`), and the
 environment variables that configure the `app` container (DB credentials, silent
 install options, etc. — see below).
 
@@ -128,9 +128,33 @@ docker compose -f compose.yml -f compose.it.yml up -d
 ```bash
 # Build locale: SUITECRM_VERSION è estratto dal tag vX.Y.Z-rN in CI; in locale passalo esplicitamente
 docker build --build-arg SUITECRM_VERSION=7.15.2 -t suitecrm:7.15.2-r0 .
-docker run -d -p 8080:80 --name suitecrm suitecrm:7.15.2-r0
+docker run -d -p 8080:8080 --name suitecrm suitecrm:7.15.2-r0
 # Tag GHCR pubblicati da CI (senza latest): 7.15.2-r0, 7.15.2, 7.15, 7
 ```
+
+## Running as non-root
+
+The image runs as Alpine's `www-data` (UID/GID **82**) by default (`USER 82:82`)
+and Apache listens on **8080** instead of 80: unprivileged processes cannot bind
+ports below 1024 in Kubernetes (Docker may allow it, but 8080 works everywhere).
+
+- **Compose**: `user: "82:82"` is already set for both `app` and `cron`; the host
+  port stays 8080.
+- **Kubernetes**: the manifests set `runAsNonRoot`, `runAsUser`/`runAsGroup: 82`
+  and `fsGroup: 82`. The latter is required because a freshly provisioned PVC is
+  root-owned: `fsGroup` makes it writable without running the container as root.
+  The Service still exposes port 80 and forwards to `targetPort: 8080`, so
+  Ingress and clients are unchanged.
+- **Existing volumes**: Docker named volumes created by older revisions were
+  already chowned to `www-data` by the entrypoint. For bind mounts or volumes
+  with different ownership, fix them once:
+  ```bash
+  docker run --rm -u 0 -v suitecrm_app_data:/var/www/html \
+    alpine chown -R 82:82 /var/www/html
+  ```
+- The entrypoint is still usable when explicitly started as root (e.g.
+  `--user 0` for repairs): privileged operations are guarded and skipped when
+  running unprivileged.
 
 ## Volumes
 
