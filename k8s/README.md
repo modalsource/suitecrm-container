@@ -75,6 +75,14 @@ kubectl get secret suitecrm-secrets -n <namespace> \
 - Silent install runs once per PVC, when `config.php` is absent. The db-init job
   is idempotent; wiping the PVC means the schema needs recreating.
 - Scale stays at 1 replica (`Recreate`) because the docroot PVC is RWO.
+- The SuiteCRM container runs as UID/GID 82 (`www-data`, non-root). Pods set
+  `runAsNonRoot`, `runAsUser`/`runAsGroup: 82` and `fsGroup: 82` so a fresh PVC
+  is writable. Apache listens on **8080** inside the container; the Service
+  keeps `port: 80` with `targetPort: 8080`, so Ingress/clients are unchanged.
+- These settings cover the SuiteCRM app and cron pods only. The in-cluster
+  MariaDB (`k8s/kustomize/database/mariadb`) and the Percona `db-init-job` use
+  their images' default users: under a namespace-wide `restricted` Pod Security
+  policy they need separate `securityContext` work.
 - Locale defaults to en_us/USD; see `compose.it.yml` for Italian values.
 - Multi-environment needs (e.g. main/rc/sandbox sharing one DB) are solved by
   instantiating these files once per environment in your infra repo: per-env

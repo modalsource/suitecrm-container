@@ -20,8 +20,10 @@ services:
 
   app:
     build: .
+    # Run as non-root (Alpine www-data). The image also sets USER 82:82.
+    user: "82:82"
     ports:
-      - "8080:80"
+      - "8080:8080"
     environment:
       # NOTE: the SUITECRM_INSTALL_* variables below are only used once, the first
       # time the container starts against an empty app_data volume, and only if
@@ -59,16 +61,18 @@ services:
     build: .
     # Sidecar per Schedulers SuiteCRM - replica la riga richiesta dalla doc:
     # * * * * * cd /var/www/html; php -f cron.php > /dev/null 2>&1
-    # Usa la stessa immagine/volume dell'app, esegue cron.php ogni 60s come www-data.
+    # Usa la stessa immagine/volume dell'app, esegue cron.php ogni 60s come www-data
+    # (il container gira già come utente non-root 82:82, niente su).
     # Stessa logica di k8s/cronjob.yaml, ma come loop (senza crond) per non richiedere
     # pacchetti extra nell'immagine.
+    user: "82:82"
     entrypoint: ["sh", "-c"]
     command:
       - |
         echo "SuiteCRM cron sidecar started (schedule: * * * * * -> cron.php)"
         while true; do
           if [ -f /var/www/html/config.php ]; then
-            su www-data -s /bin/sh -c "cd /var/www/html && php -f cron.php" || echo "cron.php failed at $$(date)" >&2
+            (cd /var/www/html && php -f cron.php) || echo "cron.php failed at $$(date)" >&2
           else
             echo "$$(date): config.php not found, skipping cron run"
           fi

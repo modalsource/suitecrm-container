@@ -43,6 +43,16 @@ spec:
         app.kubernetes.io/name: suitecrm
         app.kubernetes.io/component: app
     spec:
+      # Run unprivileged. The image defaults to UID/GID 82 (Alpine www-data);
+      # fsGroup makes the RWO PVC writable (fresh volumes are root-owned).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 82
+        runAsGroup: 82
+        fsGroup: 82
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       # Optional: pin pods to a nodepool via soft affinity, e.g.
       #   affinity:
       #     nodeAffinity:
@@ -85,8 +95,12 @@ spec:
           # Pin to a revision (e.g. 7.15.2-r0) for absolute stability.
           image: ghcr.io/modalsource/suitecrm-container:7.15.2
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
-            - containerPort: 80
+            - containerPort: 8080
               name: http
           env:
             - name: SUITECRM_INSTALL_DB_HOST
@@ -142,7 +156,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 60
             periodSeconds: 20
             timeoutSeconds: 5
@@ -150,7 +164,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -158,7 +172,7 @@ spec:
           startupProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 18 # 3 minutes max for extraction + silent install
@@ -188,7 +202,7 @@ spec:
     app.kubernetes.io/component: app
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: 8080
       protocol: TCP
       name: http
   type: ClusterIP
